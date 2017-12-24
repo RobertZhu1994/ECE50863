@@ -34,10 +34,12 @@ set(deploy_target_path "/shared/avx2")
 include_directories(
         ./
         /shared/ffmpeg/include
+        /shared/libzmq/include
 )
 
 link_directories(
         /shared/ffmpeg/lib
+        /shared/libzmq/lib
 )
 
 
@@ -58,9 +60,18 @@ SET(SOURCE
     ${HEADERS}
     )
 
+SET (FFMPEG_LIBS
+        avdevice
+        avfilter
+        avformat
+        avcodec
+        swresample
+        swscale
+        avutil
+)
+
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 	add_definitions(-DCONFIG_KAGE_GLOBAL_DEBUG_LEVEL=50)
-	#	add_definitions(-D_GLIBCXX_DEBUG)	   # will fail compilation in folly
 endif ()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -96,13 +107,7 @@ add_executable(hw_decode.bin
 		examples/hw_decode.c
 		)
 TARGET_LINK_LIBRARIES(hw_decode.bin
-		avdevice
-		avfilter
-		avformat
-		avcodec
-		swresample
-		swscale
-		avutil
+        ${FFMPEG_LIBS}
         m
         xcb
         xcb-shm
@@ -114,4 +119,17 @@ TARGET_LINK_LIBRARIES(hw_decode.bin
         lzma
 		)
 ########################################
-
+add_executable(taskvent.bin
+        examples/taskvent.cpp
+        )
+TARGET_LINK_LIBRARIES(taskvent.bin
+        zmq
+        )
+########################################
+add_executable(taskwork2.bin
+        examples/taskwork2.cpp
+        )
+TARGET_LINK_LIBRARIES(taskwork2.bin
+        zmq
+        )
+########################################
