@@ -133,3 +133,22 @@ TARGET_LINK_LIBRARIES(taskwork2.bin
         zmq
         )
 ########################################
+add_executable(decode-serv.bin
+        mydecoder.cpp
+        mysender.cpp
+        main.cpp
+        )
+TARGET_LINK_LIBRARIES(decode-serv.bin
+        ${FFMPEG_LIBS}
+        m
+        xcb
+        xcb-shm
+        xcb-shape
+        dl
+        bz2
+        z
+        pthread
+        lzma
+        zmq
+        )
+########################################
