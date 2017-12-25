@@ -44,19 +44,15 @@ link_directories(
 
 
 file (GLOB HEADERS
+        *.h
 		include/*.h
 		include/mm/*.h
 		include/xplane/*.h
 )
 
 SET(SOURCE
-	mm/batch.c
-	mm/mempool.cpp
-	${SOURCE_XPLANE}
-	${SOURCE_SORT_MERGE}
-
-	xplane_lib.cpp
 	measure.c
+	mm.cpp
     ${HEADERS}
     )
 
@@ -82,6 +78,7 @@ SET (COMMON_LIBS
         pthread
         lzma
         boost_program_options
+        boost_serialization
 )
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -153,6 +150,34 @@ add_executable(${BINARY}
         test/frame-puller.cpp
         )
 TARGET_LINK_LIBRARIES(${BINARY}
+        zmq
+        )
+add_custom_command(TARGET ${BINARY} POST_BUILD
+        COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+        )
+########################################
+SET(BINARY chunk-pusher.bin)
+add_executable(${BINARY}
+        mm.cpp
+        test/chunk-pusher.cpp
+        )
+TARGET_LINK_LIBRARIES(${BINARY}
+        ${FFMPEG_LIBS}
+        ${COMMON_LIBS}
+        zmq
+        )
+add_custom_command(TARGET ${BINARY} POST_BUILD
+        COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+        )
+########################################
+SET(BINARY chunk-puller.bin)
+add_executable(${BINARY}
+        mm.cpp
+        test/chunk-puller.cpp
+        )
+TARGET_LINK_LIBRARIES(${BINARY}
+        ${FFMPEG_LIBS}
+        ${COMMON_LIBS}
         zmq
         )
 add_custom_command(TARGET ${BINARY} POST_BUILD

@@ -20,27 +20,45 @@ private:
 	template<class Archive>
 	void serialize(Archive & ar, const unsigned int version)
 	{
-		ar & key;
+		ar & id;
 		ar & length_ms;
+		ar & size;
 	}
 
 public:
 
-	uint64_t key;
+	uint64_t id;
 	uint64_t length_ms;
+	uint64_t size; /* chunk size, in bytes */
 
 public:
 	chunk_desc(){};
-	chunk_desc(uint64_t k, uint64_t l) :
-			key(k), length_ms(l)
+	chunk_desc(uint64_t k, uint64_t l, uint64_t s) :
+			id(k), length_ms(l), size(s)
 	{}
 };
 
 struct frame_desc {
 
+private:
+	friend  class boost::serialization::access;
 
-	uint64_t chunk_key;
-	uint64_t frame_id;
+	template<class Archive>
+	void serialize(Archive & ar, const unsigned int version)
+	{
+		ar & cid;
+		ar & fid;
+	}
+
+public:
+	uint64_t cid;
+	uint64_t fid;
+
+public:
+	frame_desc() {};
+	frame_desc(uint64_t cid, uint64_t fid) :
+	 cid (cid), fid(fid) { };
+
 };
 
 #endif //VIDEO_STREAMER_MSGFMT_H

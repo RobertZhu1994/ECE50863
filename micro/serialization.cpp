@@ -39,7 +39,7 @@ void de(std::string & s)
 
 	ia >> desc;
 
-	I("key %lu length_ms %lu", desc.key, desc.length_ms);
+	I("key %lu length_ms %lu", desc.id, desc.length_ms);
 
 }
 

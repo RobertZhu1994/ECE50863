@@ -117,16 +117,19 @@ int main(int ac, char * av[])
 
 	// incoming encoded frames
 	zmq::socket_t  recver(context, ZMQ_PULL);
-	recver.bind(SERV_FRAME_RX_ADDR);
+	recver.bind(SERVER_PULL_ADDR);
 
 	// outgoing decoded frames
 	zmq::socket_t  sender(context, ZMQ_PUSH);
-	sender.bind(SERV_FRAME_TX_ADDR);
+	sender.bind(SERVER_PUSH_ADDR);
 
 	/* test with local file */
-//	decode_one_file_hw(H264_FILE, sender);
-//	decode_one_file_sw(H264_FILE, sender);
-	decode_one_file_sw(MPG1_FILE, sender);
+	if (the_config.use_hw)
+		decode_one_file_hw(H264_FILE, sender);
+	else {
+		decode_one_file_sw(H264_FILE, sender);
+//		decode_one_file_sw(MPG1_FILE, sender);
+	}
 
 	return 0;
 }

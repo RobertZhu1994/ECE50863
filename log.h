@@ -197,6 +197,8 @@ extern int kage_enable_uart(void);
 	abort(); \
 } while (0)
 
+#include <stdlib.h>  // for abort
+
 #define bug(MSG) do { EE(MSG); abort(); } while (0)
 /* idea from kernel */
 #define xzl_likely(x)       __builtin_expect((x),1)
