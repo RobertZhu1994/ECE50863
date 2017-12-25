@@ -24,7 +24,8 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t & sender)
 	/* will free @buffer internally */
 	zmq::message_t msg(buffer, size, my_free);
 	ret = sender.send(msg);
-	xzl_bug_on(ret != 0);
+	xzl_bug_on(!ret);
 
 	return 0;
 }
+

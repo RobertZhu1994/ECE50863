@@ -28,22 +28,11 @@
 
 #include <zmq.hpp>
 
-extern "C" {
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/pixdesc.h>
-#include <libavutil/hwcontext.h>
-#include <libavutil/opt.h>
-#include <libavutil/avassert.h>
-#include <libavutil/imgutils.h>
-}
-
-#include "log.h"
 #include "mydecoder.h"
+#include "log.h"
 
 static AVBufferRef *hw_device_ctx = NULL;
 static enum AVPixelFormat hw_pix_fmt;
-static FILE *output_file = NULL;
 
 static enum AVPixelFormat find_fmt_by_hw_type(const enum AVHWDeviceType type)
 {
@@ -87,13 +76,19 @@ static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
 	return AV_PIX_FMT_NONE;
 }
 
+static char err_string[50];
+
 static int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type)
 {
 	int err = 0;
 
 	if ((err = av_hwdevice_ctx_create(&hw_device_ctx, type,
 																		NULL, NULL, 0)) < 0) {
-		fprintf(stderr, "Failed to create specified HW device.\n");
+
+		av_strerror(err, err_string, 50);
+		fprintf(stderr, "Failed to create specified HW device. err %d %s\n",
+		err, err_string);
+
 		return err;
 	}
 	ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
@@ -101,8 +96,11 @@ static int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type)
 	return err;
 }
 
-/* decode a @packet into a set of frames, write each frame as a msg to @sender */
-static int decode_write(AVCodecContext *avctx, AVPacket *packet,
+/* decode a @packet into a set of frames, write each frame as a msg to @sender
+ *
+ * the hw decoder workflow
+ */
+static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 												zmq::socket_t & sender)
 {
 	AVFrame *frame = NULL, *sw_frame = NULL;
@@ -117,6 +115,7 @@ static int decode_write(AVCodecContext *avctx, AVPacket *packet,
 		return ret;
 	}
 
+	/* xzl: XXX why allocate new frame every time? expensive? */
 	while (ret >= 0) {
 		if (!(frame = av_frame_alloc()) || !(sw_frame = av_frame_alloc())) {
 			fprintf(stderr, "Can not alloc frame\n");
@@ -181,12 +180,14 @@ static int decode_write(AVCodecContext *avctx, AVPacket *packet,
 	return 0;
 }
 
+
+
 //static AVCodec *decoder = NULL;
 //static int video_stream = -1;
 //static AVCodecContext *decoder_ctx = NULL; /* okay to reuse across files? */
 
 /* decode one file and write frames to @sender */
-int decode_one_file(const char *fname, zmq::socket_t & sender) {
+int decode_one_file_hw(const char *fname, zmq::socket_t &sender) {
 
 	AVFormatContext *input_ctx = NULL;
 	int video_stream = -1, ret;
@@ -196,9 +197,9 @@ int decode_one_file(const char *fname, zmq::socket_t & sender) {
 	AVPacket packet;
 	enum AVHWDeviceType type;
 
-	const char * devname = "cuda";
+	const char * devname = "cuda"; // "cuda" "vdpau"
 
-	av_register_all();
+//	av_register_all();
 
 	type = av_hwdevice_find_type_by_name(devname);
 	hw_pix_fmt = find_fmt_by_hw_type(type);
@@ -256,7 +257,7 @@ int decode_one_file(const char *fname, zmq::socket_t & sender) {
 			break;
 
 		if (video_stream == packet.stream_index)
-			ret = decode_write(decoder_ctx, &packet, sender);
+			ret = decode_write_hw(decoder_ctx, &packet, sender);
 
 		av_packet_unref(&packet);
 	}
@@ -264,11 +265,12 @@ int decode_one_file(const char *fname, zmq::socket_t & sender) {
 	/* flush the decoder */
 	packet.data = NULL;
 	packet.size = 0;
-	ret = decode_write(decoder_ctx, &packet, sender);
+	ret = decode_write_hw(decoder_ctx, &packet, sender);
 	av_packet_unref(&packet);
 
 	avcodec_free_context(&decoder_ctx);
 	avformat_close_input(&input_ctx);
 	av_buffer_unref(&hw_device_ctx);
 
+	return 0;
 }

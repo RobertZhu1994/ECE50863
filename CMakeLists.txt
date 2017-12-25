@@ -23,7 +23,7 @@ SET(CMAKE_CXX_FLAGS_RELEASE "-std=c++11 -g -Wall -O3 -DHAVE_NUMA")
 SET(CMAKE_C_FLAGS_DEBUG
 		"${CMAKE_C_FLAGS_DEBUG} -std=gnu11 -g -O0 -Wall -Wfatal-errors")
 
-set(deploy_target_path "/shared/avx2")
+set(deploy_target_path "localhost:/tmp/$ENV{USER}")
 
 ################################
 #  headers, source
@@ -68,10 +68,25 @@ SET (FFMPEG_LIBS
         swresample
         swscale
         avutil
+#				X11 va-x11 va-drm vdpau va # intel's video accel lib etc
+)
+
+SET (COMMON_LIBS
+        m
+        xcb
+        xcb-shm
+        xcb-shape
+        dl
+        bz2
+        z
+        pthread
+        lzma
+        boost_program_options
 )
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-	add_definitions(-DCONFIG_KAGE_GLOBAL_DEBUG_LEVEL=50)
+	add_definitions(-DCONFIG_KAGE_GLOBAL_DEBUG_LEVEL=30)
+    add_definitions(-DDEBUG)
 endif ()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -133,22 +148,30 @@ TARGET_LINK_LIBRARIES(taskwork2.bin
         zmq
         )
 ########################################
+SET(BINARY frame-puller.bin)
+add_executable(${BINARY}
+        test/frame-puller.cpp
+        )
+TARGET_LINK_LIBRARIES(${BINARY}
+        zmq
+        )
+add_custom_command(TARGET ${BINARY} POST_BUILD
+        COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+        )
+########################################
+SET(BINARY decode-serv.bin)
 add_executable(decode-serv.bin
-        mydecoder.cpp
+        mydecoder_hw.cpp
+        mydecoder_sw.cpp
         mysender.cpp
         main.cpp
         )
 TARGET_LINK_LIBRARIES(decode-serv.bin
         ${FFMPEG_LIBS}
-        m
-        xcb
-        xcb-shm
-        xcb-shape
-        dl
-        bz2
-        z
-        pthread
-        lzma
+        ${COMMON_LIBS}
         zmq
+        )
+add_custom_command(TARGET ${BINARY} POST_BUILD
+        COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
