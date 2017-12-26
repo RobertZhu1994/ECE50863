@@ -7,6 +7,8 @@
 #ifndef VIDEO_STREAMER_MSGFMT_H
 #define VIDEO_STREAMER_MSGFMT_H
 
+#include <memory> // shared_ptr
+
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
 
@@ -60,5 +62,13 @@ public:
 	 cid (cid), fid(fid) { };
 
 };
+
+std::shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, chunk_desc *desc);
+
+void recv_one_chunk_to_buf(zmq::socket_t & s, chunk_desc *desc,
+													 char **p, size_t *sz);
+
+void recv_one_chunk_tofile(zmq::socket_t & s, chunk_desc *desc,
+													 const char * fname);
 
 #endif //VIDEO_STREAMER_MSGFMT_H

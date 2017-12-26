@@ -115,11 +115,11 @@ int main(int ac, char * av[])
 
 	zmq::context_t context (1 /* # of io threads */);
 
-	// incoming encoded frames
+	// for incoming encoded chunks
 	zmq::socket_t  recver(context, ZMQ_PULL);
 	recver.bind(SERVER_PULL_ADDR);
 
-	// outgoing decoded frames
+	// for outgoing decoded frames
 	zmq::socket_t  sender(context, ZMQ_PUSH);
 	sender.bind(SERVER_PUSH_ADDR);
 

@@ -14,7 +14,6 @@
 #include "msgfmt.h"
 #include "log.h"
 
-
 void recv_one_file(const char *fname /* to save */) {
 	zmq::context_t context(1 /* # io threads */);
 
@@ -60,7 +59,23 @@ void recv_one_file(const char *fname /* to save */) {
 
 }
 
+void test_recv_one_chunk(const char *fname /* to save */)
+{
+	zmq::context_t context(1 /* # io threads */);
+
+	zmq::socket_t recv(context, ZMQ_PULL);
+	recv.bind(SERVER_PULL_ADDR);
+
+	I("bound to socket");
+
+	chunk_desc desc;
+	recv_one_chunk_tofile(recv, &desc, fname);
+
+	I("written to file %s", fname);
+}
+
 int main (int argc, char *argv[])
 {
-		recv_one_file(argv[1]);
+//		recv_one_file(argv[1]);
+	test_recv_one_chunk(argv[1]);
 }

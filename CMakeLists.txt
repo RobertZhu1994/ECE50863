@@ -173,6 +173,7 @@ add_custom_command(TARGET ${BINARY} POST_BUILD
 SET(BINARY chunk-puller.bin)
 add_executable(${BINARY}
         mm.cpp
+        rxtx.cpp
         test/chunk-puller.cpp
         )
 TARGET_LINK_LIBRARIES(${BINARY}
@@ -188,8 +189,8 @@ SET(BINARY decode-serv.bin)
 add_executable(decode-serv.bin
         mydecoder_hw.cpp
         mydecoder_sw.cpp
-        mysender.cpp
-        main.cpp
+        rxtx.cpp
+        main_serv.cpp
         )
 TARGET_LINK_LIBRARIES(decode-serv.bin
         ${FFMPEG_LIBS}
