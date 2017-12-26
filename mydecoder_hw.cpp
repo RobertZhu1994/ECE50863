@@ -31,37 +31,9 @@
 #include "mydecoder.h"
 #include "log.h"
 
+#ifdef USE_HW
 static AVBufferRef *hw_device_ctx = NULL;
 static enum AVPixelFormat hw_pix_fmt;
-
-static enum AVPixelFormat find_fmt_by_hw_type(const enum AVHWDeviceType type)
-{
-	enum AVPixelFormat fmt;
-
-	switch (type) {
-		case AV_HWDEVICE_TYPE_VAAPI:
-			fmt = AV_PIX_FMT_VAAPI;
-			break;
-		case AV_HWDEVICE_TYPE_DXVA2:
-			fmt = AV_PIX_FMT_DXVA2_VLD;
-			break;
-		case AV_HWDEVICE_TYPE_D3D11VA:
-			fmt = AV_PIX_FMT_D3D11;
-			break;
-		case AV_HWDEVICE_TYPE_VDPAU:
-			fmt = AV_PIX_FMT_VDPAU;
-			break;
-		case AV_HWDEVICE_TYPE_VIDEOTOOLBOX:
-			fmt = AV_PIX_FMT_VIDEOTOOLBOX;
-			break;
-		default:
-			fmt = AV_PIX_FMT_NONE;
-			break;
-	}
-
-	return fmt;
-}
-
 static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
 																				const enum AVPixelFormat *pix_fmts)
 {
@@ -76,25 +48,20 @@ static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
 	return AV_PIX_FMT_NONE;
 }
 
-static char err_string[50];
-
 static int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type)
 {
 	int err = 0;
 
 	if ((err = av_hwdevice_ctx_create(&hw_device_ctx, type,
 																		NULL, NULL, 0)) < 0) {
-
-		av_strerror(err, err_string, 50);
-		fprintf(stderr, "Failed to create specified HW device. err %d %s\n",
-		err, err_string);
-
+		fprintf(stderr, "Failed to create specified HW device.\n");
 		return err;
 	}
 	ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
 
 	return err;
 }
+#endif
 
 /* decode a @packet into a set of frames, write each frame as a msg to @sender
  *
@@ -133,6 +100,7 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 			goto fail;
 		}
 
+#ifdef USE_HW
 		if (frame->format == hw_pix_fmt) {
 			/* retrieve data from GPU to CPU */
 			if ((ret = av_hwframe_transfer_data(sw_frame, frame, 0)) < 0) {
@@ -141,6 +109,7 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 			}
 			tmp_frame = sw_frame;
 		} else
+#endif
 			tmp_frame = frame;
 
 		size = av_image_get_buffer_size((enum AVPixelFormat) tmp_frame->format,
@@ -184,8 +153,6 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 	return 0;
 }
 
-
-
 //static AVCodec *decoder = NULL;
 //static int video_stream = -1;
 //static AVCodecContext *decoder_ctx = NULL; /* okay to reuse across files? */
@@ -200,18 +167,26 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 	AVCodecContext *decoder_ctx = NULL;
 	AVCodec *decoder = NULL;
 	AVPacket packet;
-	enum AVHWDeviceType type;
 
+#ifdef USE_HW
+	enum AVHWDeviceType type;
 	const char * devname = "cuda"; // "cuda" "vdpau"
+#endif
+
 
 //	av_register_all();
 
-	type = av_hwdevice_find_type_by_name(devname);
-	hw_pix_fmt = find_fmt_by_hw_type(type);
-	if (hw_pix_fmt == -1) {
-		fprintf(stderr, "Cannot support '%s' in this example.\n", devname);
-		return -1;
-	}
+#ifdef USE_HW
+	type = av_hwdevice_find_type_by_name(argv[1]);
+    if (type == AV_HWDEVICE_TYPE_NONE) {
+        fprintf(stderr, "Device type %s is not supported.\n", argv[1]);
+        fprintf(stderr, "Available device types:");
+        while((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE)
+            fprintf(stderr, " %s", av_hwdevice_get_type_name(type));
+        fprintf(stderr, "\n");
+        return -1;
+    }
+#endif
 
 	/* open the input file */
 	xzl_assert(fname);
@@ -234,6 +209,23 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 	}
 	video_stream = ret;
 
+#ifdef USE_HW
+	for (i = 0;; i++) {
+        const AVCodecHWConfig *config = avcodec_get_hw_config(decoder, i);
+        if (!config) {
+            fprintf(stderr, "Decoder %s does not support device type %s.\n",
+                    decoder->name, av_hwdevice_get_type_name(type));
+            return -1;
+        }
+        if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+            config->device_type == type) {
+            hw_pix_fmt = config->pix_fmt;
+            break;
+        }
+    }
+#endif
+
+
 	decoder_ctx = avcodec_alloc_context3(decoder);
 	xzl_bug_on_msg(!decoder_ctx, "no mem for avcodec ctx");
 //}
@@ -245,11 +237,16 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 		ret = avcodec_parameters_to_context(decoder_ctx, video->codecpar);
 		xzl_bug_on(ret < 0);
 
-		decoder_ctx->get_format  = get_hw_format;
+#ifdef USE_HW
+	decoder_ctx->get_format  = get_hw_format;
+#endif
+
 		av_opt_set_int(decoder_ctx, "refcounted_frames", 1, 0);
 
+#ifdef USE_HW
 		ret = hw_decoder_init(decoder_ctx, type);
 		xzl_bug_on_msg(ret < 0, "hw decoder init failed");
+#endif
 
 		ret = avcodec_open2(decoder_ctx, decoder, NULL);
 		xzl_bug_on_msg(ret < 0, "Failed to open codec for stream");
@@ -275,7 +272,10 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 
 	avcodec_free_context(&decoder_ctx);
 	avformat_close_input(&input_ctx);
+
+#ifdef USE_HW
 	av_buffer_unref(&hw_device_ctx);
+#endif
 
 	return 0;
 }

@@ -36,7 +36,7 @@ void parse_options(int ac, char *av[], serv_config* config)
 		po::options_description desc("Allowed options");
 		desc.add_options()
 				("help,h", "produce help message")
-				("hw-decode,w", po::value<bool>(), "using hw decoder")
+				("hw-decode,w", "using hw decoder")
 //		("bundles,b", po::value<unsigned long>(), "bundles per wm interval")
 //		("target_tput,t", po::value<unsigned long>(), "target throughput (krec/s)")
 //		("record_size,z", po::value<unsigned long>(), "record (string_range) size (bytes)")
@@ -53,8 +53,8 @@ void parse_options(int ac, char *av[], serv_config* config)
 			exit(1);
 		}
 
-		if (vm.count("target_tput")) {
-			config->use_hw = vm["hw-decode"].as<bool>();
+		if (vm.count("hw-decode")) {
+			config->use_hw = true;
 		}
 
 //		if (vm.count("record_size")) {
@@ -138,7 +138,9 @@ int main(int ac, char * av[])
 	}
 	else {
 		chunk_desc desc; /* XXX fill it XXX */
-		decode_one_file_hw(H264_FILE, sender, desc);
+		const char * fname = "/tmp/data.file";
+		recv_one_chunk_tofile(recver, &desc, fname);
+		decode_one_file_hw(fname, sender, desc);
 	}
 
 	return 0;
