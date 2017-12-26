@@ -3,6 +3,7 @@
 //
 
 #include "mydecoder.h"
+#include "msgfmt.h"
 #include "log.h"
 
 #define INBUF_SIZE (16 * 1024)
@@ -12,7 +13,7 @@
 /* sw decoding workflow.
  * @frame allocated once by the caller. */
 static int decode_write_sw(AVCodecContext *dec_ctx, AVFrame *frame, AVPacket *pkt,
-														zmq::socket_t & sender)
+														zmq::socket_t & sender, chunk_desc const & cdesc)
 {
 	int ret, size;
 	uint8_t *buffer = NULL;
@@ -59,7 +60,8 @@ static int decode_write_sw(AVCodecContext *dec_ctx, AVFrame *frame, AVPacket *pk
 
 		xzl_bug_on(ret < 0);
 
-		ret = send_one_frame(buffer, size, sender); /* will free buffer */
+		frame_desc fdesc (cdesc.id, dec_ctx->frame_number); /* XXX: gen fdesc */
+		ret = send_one_frame(buffer, size, sender, fdesc); /* will free buffer */
 		xzl_bug_on_msg(ret < 0, "Failed to dump raw data.\n");
 
 		I("sent out one frame -- %d", dec_ctx->frame_number);
@@ -78,8 +80,8 @@ static int decode_write_sw(AVCodecContext *dec_ctx, AVFrame *frame, AVPacket *pk
 
 static uint8_t inbuf[INBUF_SIZE + AV_INPUT_BUFFER_PADDING_SIZE];
 
-int decode_one_file_sw(const char *fname, zmq::socket_t &sender)
-{
+int decode_one_file_sw(const char *fname, zmq::socket_t &sender,
+											 chunk_desc const &cdesc /* chunk info */) {
 	const AVCodec *codec;
 	AVCodecParserContext *parser;
 	AVCodecContext *c= NULL;
@@ -142,12 +144,12 @@ int decode_one_file_sw(const char *fname, zmq::socket_t &sender)
 			data_size -= ret;
 
 			if (pkt->size)
-				decode_write_sw(c, frame, pkt, sender);
+				decode_write_sw(c, frame, pkt, sender, cdesc);
 		}
 	}
 
 	/* flush the decoder */
-	decode_write_sw(c, frame, NULL, sender);
+	decode_write_sw(c, frame, NULL, sender, cdesc);
 
 	fclose(f);
 

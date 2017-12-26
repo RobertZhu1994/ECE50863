@@ -10,6 +10,7 @@
 #include "mydecoder.h"
 
 #include "log.h"
+#include "msgfmt.h"
 
 using namespace std;
 namespace po = boost::program_options;
@@ -123,12 +124,19 @@ int main(int ac, char * av[])
 	zmq::socket_t  sender(context, ZMQ_PUSH);
 	sender.bind(SERVER_PUSH_ADDR);
 
+	I("bound to sockets...");
+
 	/* test with local file */
-	if (the_config.use_hw)
-		decode_one_file_hw(H264_FILE, sender);
+	if (!the_config.use_hw) {
+		chunk_desc desc;
+		const char * fname = "/tmp/data.file";
+		recv_one_chunk_tofile(recver, &desc, fname);
+		decode_one_file_sw(fname, sender, desc);
+//		decode_one_file_hw(H264_FILE, sender);
+	}
 	else {
-		decode_one_file_sw(H264_FILE, sender);
-//		decode_one_file_sw(MPG1_FILE, sender);
+		chunk_desc desc; /* XXX fill it XXX */
+		decode_one_file_hw(H264_FILE, sender, desc);
 	}
 
 	return 0;

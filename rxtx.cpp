@@ -10,27 +10,54 @@ extern "C" {
 #include "config.h"
 #include "msgfmt.h"
 #include "log.h"
+#include "mm.h"
 
 using namespace std;
 
+#if 0
 /* free frame data */
 static void my_free_av (void *data, void *hint)
 {
 	xzl_bug_on(!data);
 	av_freep(&data);
 }
+#endif
 
-/* @buffer allocated from av_malloc. zmq will free it */
-int send_one_frame(uint8_t *buffer, int size, zmq::socket_t & sender)
+/* @buffer allocated from av_malloc. zmq has to free it */
+int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
+									 frame_desc const & fdesc)
 {
 	int ret;
 
 	xzl_bug_on(!buffer);
 
+	{
+		/* send frame desc */
+		ostringstream oss;
+		boost::archive::text_oarchive oa(oss);
+
+		oa << fdesc;
+		string s = oss.str();
+
+		zmq::message_t dmsg(s.begin(), s.end());
+		sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
+
+		I("desc sent");
+
+		/* send frame */
+
+		auto hint = new my_alloc_hint(USE_AVMALLOC, size);
+		zmq::message_t cmsg(buffer, size, my_free, hint);
+		ret = sender.send(cmsg, 0); /* no more msg */
+		xzl_bug_on(!ret);
+
+		I("frame sent");
+	}
+
 	/* will free @buffer internally */
-	zmq::message_t msg(buffer, size, my_free_av);
-	ret = sender.send(msg);
-	xzl_bug_on(!ret);
+//	zmq::message_t msg(buffer, size, my_free_av);
+//	ret = sender.send(msg);
+//	xzl_bug_on(!ret);
 
 	return 0;
 }

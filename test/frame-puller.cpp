@@ -3,10 +3,41 @@
 //
 // tester: pull frames from a
 
+#include <sstream> // std::ostringstream
+
 #include <zmq.hpp>
 
 #include "config.h"
+#include "msgfmt.h"
 #include "log.h"
+
+void recv_one_frame(zmq::socket_t & recv) {
+
+	I("start to rx msgs...");
+
+	{
+		/* recv the desc */
+		zmq::message_t dmsg;
+		recv.recv(&dmsg);
+		I("got desc msg. msg size =%lu", dmsg.size());
+
+		std::string s((char const *)dmsg.data(), dmsg.size()); /* copy over */
+		frame_desc desc;
+		std::istringstream ss(s);
+		boost::archive::text_iarchive ia(ss);
+
+		ia >> desc;
+		I("cid %lu fid %lu", desc.cid, desc.fid);
+	}
+
+	{	/* recv the frame */
+		zmq::message_t cmsg;
+		recv.recv(&cmsg);
+		I("got frame msg. size =%lu", cmsg.size());
+
+		xzl_bug_on_msg(cmsg.more(), "there should be no more");
+	}
+}
 
 int main (int argc, char *argv[])
 {
@@ -15,12 +46,10 @@ int main (int argc, char *argv[])
 	zmq::socket_t receiver(context, ZMQ_PULL);
 	receiver.connect(CLIENT_PULL_FROM_ADDR);
 
-	I("start to rx msgs...");
+	I("bound to socket");
 
 	while (1) {
-		zmq::message_t message;
-		receiver.recv(&message);
-		I("got a msg. size %lu", message.size());
+		recv_one_frame(receiver);
 	}
 
 	return 0;

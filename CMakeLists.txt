@@ -145,15 +145,16 @@ TARGET_LINK_LIBRARIES(taskwork2.bin
         zmq
         )
 ########################################
-SET(BINARY frame-puller.bin)
-add_executable(${BINARY}
-        test/frame-puller.cpp
+SET(PROGRAM frame-puller)
+add_executable(${PROGRAM}.bin
+        test/${PROGRAM}.cpp
         )
-TARGET_LINK_LIBRARIES(${BINARY}
+TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        ${COMMON_LIBS}
         zmq
         )
-add_custom_command(TARGET ${BINARY} POST_BUILD
-        COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
+        COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
 SET(BINARY chunk-pusher.bin)
@@ -190,6 +191,7 @@ add_executable(decode-serv.bin
         mydecoder_hw.cpp
         mydecoder_sw.cpp
         rxtx.cpp
+        mm.cpp
         main_serv.cpp
         )
 TARGET_LINK_LIBRARIES(decode-serv.bin

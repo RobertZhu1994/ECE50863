@@ -101,7 +101,7 @@ static int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type)
  * the hw decoder workflow
  */
 static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
-												zmq::socket_t & sender)
+												zmq::socket_t & sender, chunk_desc const & cdesc)
 {
 	AVFrame *frame = NULL, *sw_frame = NULL;
 	AVFrame *tmp_frame = NULL;
@@ -163,9 +163,13 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 			goto fail;
 		}
 
-		if ((ret = send_one_frame(buffer, size, sender)) < 0) { /* will free buffer */
-			fprintf(stderr, "Failed to dump raw data.\n");
-			goto fail;
+		{
+			frame_desc fdesc(cdesc.id, avctx->frame_number); /* XXX: gen fdesc */
+			if ((ret = send_one_frame(buffer, size, sender, fdesc)) <
+					0) { /* will free buffer */
+				fprintf(stderr, "Failed to dump raw data.\n");
+				goto fail;
+			}
 		}
 
 		fail:
@@ -187,7 +191,8 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 //static AVCodecContext *decoder_ctx = NULL; /* okay to reuse across files? */
 
 /* decode one file and write frames to @sender */
-int decode_one_file_hw(const char *fname, zmq::socket_t &sender) {
+int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
+											 chunk_desc const &cdesc /* chunk info */) {
 
 	AVFormatContext *input_ctx = NULL;
 	int video_stream = -1, ret;
@@ -257,7 +262,7 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender) {
 			break;
 
 		if (video_stream == packet.stream_index)
-			ret = decode_write_hw(decoder_ctx, &packet, sender);
+			ret = decode_write_hw(decoder_ctx, &packet, sender, cdesc);
 
 		av_packet_unref(&packet);
 	}
@@ -265,7 +270,7 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender) {
 	/* flush the decoder */
 	packet.data = NULL;
 	packet.size = 0;
-	ret = decode_write_hw(decoder_ctx, &packet, sender);
+	ret = decode_write_hw(decoder_ctx, &packet, sender, cdesc);
 	av_packet_unref(&packet);
 
 	avcodec_free_context(&decoder_ctx);
