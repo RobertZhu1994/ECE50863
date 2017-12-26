@@ -6,6 +6,7 @@
 #include <zmq.hpp>
 extern "C" {
 #include <libavutil/mem.h>
+#include "measure.h"
 }
 #include "config.h"
 #include "msgfmt.h"
@@ -108,6 +109,8 @@ char **p, size_t *sz) {
 
 	auto cmsg = recv_one_chunk(s, desc);
 
+	k2_measure("chunk recv'd");
+
 	char * buf = (char *)malloc(cmsg->size());
 	xzl_bug_on(!buf);
 
@@ -143,6 +146,8 @@ const char * fname) {
 	I("written chunk to file %s", fname);
 
 	free(buf);
+
+	k2_measure("file written");
 }
 
 /* XXX */

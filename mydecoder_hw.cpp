@@ -28,8 +28,9 @@
 
 #include <zmq.hpp>
 
-#include "mydecoder.h"
+#include "measure.h"
 #include "log.h"
+#include "mydecoder.h"
 
 #ifdef USE_HW
 static AVBufferRef *hw_device_ctx = NULL;
@@ -176,6 +177,8 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 
 //	av_register_all();
 
+	k2_measure("decode start");
+
 #ifdef USE_HW
 	type = av_hwdevice_find_type_by_name(argv[1]);
     if (type == AV_HWDEVICE_TYPE_NONE) {
@@ -252,7 +255,8 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 		xzl_bug_on_msg(ret < 0, "Failed to open codec for stream");
 //	}
 
-	/* actual decoding and dump the raw data */
+	k2_measure("decoder init'd");
+
 	/* actual decoding and dump the raw data */
 	while (ret >= 0) {
 		if ((ret = av_read_frame(input_ctx, &packet)) < 0)
@@ -268,8 +272,13 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 	packet.data = NULL;
 	packet.size = 0;
 	ret = decode_write_hw(decoder_ctx, &packet, sender, cdesc);
-	av_packet_unref(&packet);
 
+	k2_measure("decode/send end");
+
+	// may skew the measurement
+//	EE("total %d frames", decoder_ctx->frame_number);
+
+	av_packet_unref(&packet);
 	avcodec_free_context(&decoder_ctx);
 	avformat_close_input(&input_ctx);
 

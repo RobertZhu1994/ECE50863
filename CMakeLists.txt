@@ -206,6 +206,7 @@ add_custom_command(TARGET ${BINARY} POST_BUILD
 SET(BINARY chunk-puller.bin)
 add_executable(${BINARY}
         mm.cpp
+        measure.c
         rxtx.cpp
         test/chunk-puller.cpp
         )
@@ -218,20 +219,21 @@ add_custom_command(TARGET ${BINARY} POST_BUILD
         COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
-SET(BINARY decode-serv.bin)
-add_executable(decode-serv.bin
+SET(PROGRAM serv)
+add_executable(${PROGRAM}.bin
         mydecoder_hw.cpp
         mydecoder_sw.cpp
         rxtx.cpp
         mm.cpp
+        measure.c
         main_serv.cpp
         )
-TARGET_LINK_LIBRARIES(decode-serv.bin
+TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
         zmq
         )
-add_custom_command(TARGET ${BINARY} POST_BUILD
-        COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
+        COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################

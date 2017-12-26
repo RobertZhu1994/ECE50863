@@ -10,6 +10,7 @@
 #include "mydecoder.h"
 
 #include "log.h"
+#include "measure.h"
 #include "msgfmt.h"
 
 using namespace std;
@@ -128,19 +129,22 @@ int main(int ac, char * av[])
 
 	I("bound to sockets...");
 
-	/* test with local file */
-	if (!the_config.use_hw) {
-		chunk_desc desc;
-//		const char * fname = "/tmp/data.file";
-//		recv_one_chunk_tofile(recver, &desc, fname);
-//		decode_one_file_sw(fname, sender, desc);
-		decode_one_file_sw(H264_FILE, sender, desc);
-	}
-	else {
-		chunk_desc desc; /* XXX fill it XXX */
-		const char * fname = "/tmp/data.file";
-		recv_one_chunk_tofile(recver, &desc, fname);
-		decode_one_file_hw(fname, sender, desc);
+	while (1) {
+		/* test with local file */
+		if (!the_config.use_hw) {
+			chunk_desc desc;
+			//		const char * fname = "/tmp/data.file";
+			//		recv_one_chunk_tofile(recver, &desc, fname);
+			//		decode_one_file_sw(fname, sender, desc);
+			decode_one_file_sw(H264_FILE, sender, desc);
+		} else {
+			chunk_desc desc; /* XXX fill it XXX */
+			const char *fname = "/shared/tmp/data.file";
+//			const char *fname = "/tmp/data.file";
+			recv_one_chunk_tofile(recver, &desc, fname);
+			decode_one_file_hw(fname, sender, desc);
+		}
+		k2_measure_flush();
 	}
 
 	return 0;

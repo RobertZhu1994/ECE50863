@@ -110,3 +110,7 @@ echo "available commands: pull and push"
 
 echo "add cuda lib to lib path"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
+
+#
+# make tmpfs using
+# sudo mount -t tmpfs -o size=100M,nr_inodes=1000,mode=777 tmpfs /shared/tmp
