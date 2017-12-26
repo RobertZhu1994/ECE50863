@@ -6,7 +6,8 @@
 #include "msgfmt.h"
 #include "log.h"
 
-#define INBUF_SIZE (16 * 1024)
+#define INBUF_SIZE (4 * 1024  * 1024)
+//#define INBUF_SIZE (1024)
 
 /* cf: decode_video.c in ffmpeg */
 
@@ -98,8 +99,8 @@ int decode_one_file_sw(const char *fname, zmq::socket_t &sender,
 	xzl_bug_on(!pkt);
 
 	/* find the MPEG-1 video decoder */
-	codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
-//	codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+//	codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
+	codec = avcodec_find_decoder(AV_CODEC_ID_H264);
 	xzl_bug_on(!codec);
 
 	parser = av_parser_init(codec->id);
@@ -136,6 +137,7 @@ int decode_one_file_sw(const char *fname, zmq::socket_t &sender,
 			ret = av_parser_parse2(parser, c, &pkt->data, &pkt->size,
 														 data, data_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
 			/* XXX: if &pkt->size == 0 && ret > 0, larger @data_size is needed */
+//			xzl_bug_on(pkt->size == 0);
 			if (ret < 0) {
 				fprintf(stderr, "Error while parsing\n");
 				exit(1);

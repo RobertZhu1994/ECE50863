@@ -131,6 +131,38 @@ TARGET_LINK_LIBRARIES(hw_decode.bin
         lzma
 		)
 ########################################
+add_executable(demuxing_decoding.bin
+        examples/demuxing_decoding.c
+        )
+TARGET_LINK_LIBRARIES(demuxing_decoding.bin
+        ${FFMPEG_LIBS}
+        m
+        xcb
+        xcb-shm
+        xcb-shape
+        dl
+        bz2
+        z
+        pthread
+        lzma
+        )
+########################################
+add_executable(decode_video.bin
+        examples/decode_video.c
+        )
+TARGET_LINK_LIBRARIES(decode_video.bin
+        ${FFMPEG_LIBS}
+        m
+        xcb
+        xcb-shm
+        xcb-shape
+        dl
+        bz2
+        z
+        pthread
+        lzma
+        )
+########################################
 add_executable(taskvent.bin
         examples/taskvent.cpp
         )
