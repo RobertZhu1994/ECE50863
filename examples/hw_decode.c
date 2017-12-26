@@ -40,10 +40,16 @@
 #include <libavutil/avassert.h>
 #include <libavutil/imgutils.h>
 
+/* xzl - whether to use hw for decoding */
+//#define USE_HW  1
+
+#ifdef USE_HW
 static AVBufferRef *hw_device_ctx = NULL;
 static enum AVPixelFormat hw_pix_fmt;
+#endif
 static FILE *output_file = NULL;
 
+#ifdef USE_HW
 static int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type)
 {
     int err = 0;
@@ -57,7 +63,9 @@ static int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type)
 
     return err;
 }
+#endif
 
+#ifdef USE_HW
 static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
                                         const enum AVPixelFormat *pix_fmts)
 {
@@ -71,6 +79,7 @@ static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
     fprintf(stderr, "Failed to get HW surface format.\n");
     return AV_PIX_FMT_NONE;
 }
+#endif
 
 static int decode_write(AVCodecContext *avctx, AVPacket *packet)
 {
@@ -103,6 +112,7 @@ static int decode_write(AVCodecContext *avctx, AVPacket *packet)
             goto fail;
         }
 
+#ifdef USE_HW
         if (frame->format == hw_pix_fmt) {
             /* retrieve data from GPU to CPU */
             if ((ret = av_hwframe_transfer_data(sw_frame, frame, 0)) < 0) {
@@ -111,6 +121,7 @@ static int decode_write(AVCodecContext *avctx, AVPacket *packet)
             }
             tmp_frame = sw_frame;
         } else
+#endif
             tmp_frame = frame;
 
         size = av_image_get_buffer_size(tmp_frame->format, tmp_frame->width,
@@ -135,6 +146,8 @@ static int decode_write(AVCodecContext *avctx, AVPacket *packet)
             goto fail;
         }
 
+        fprintf(stderr, "written frame %d\n", avctx->frame_number);
+
     fail:
         av_frame_free(&frame);
         av_frame_free(&sw_frame);
@@ -155,7 +168,9 @@ int main(int argc, char *argv[])
     AVCodecContext *decoder_ctx = NULL;
     AVCodec *decoder = NULL;
     AVPacket packet;
+#ifdef USE_HW
     enum AVHWDeviceType type;
+#endif
     int i;
 
     if (argc < 4) {
@@ -165,6 +180,7 @@ int main(int argc, char *argv[])
 
     av_register_all();
 
+#ifdef USE_HW
     type = av_hwdevice_find_type_by_name(argv[1]);
     if (type == AV_HWDEVICE_TYPE_NONE) {
         fprintf(stderr, "Device type %s is not supported.\n", argv[1]);
@@ -174,6 +190,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "\n");
         return -1;
     }
+#endif
 
     /* open the input file */
     if (avformat_open_input(&input_ctx, argv[2], NULL, NULL) != 0) {
@@ -194,6 +211,7 @@ int main(int argc, char *argv[])
     }
     video_stream = ret;
 
+#ifdef USE_HW
     for (i = 0;; i++) {
         const AVCodecHWConfig *config = avcodec_get_hw_config(decoder, i);
         if (!config) {
@@ -207,6 +225,7 @@ int main(int argc, char *argv[])
             break;
         }
     }
+#endif
 
     if (!(decoder_ctx = avcodec_alloc_context3(decoder)))
         return AVERROR(ENOMEM);
@@ -215,11 +234,16 @@ int main(int argc, char *argv[])
     if (avcodec_parameters_to_context(decoder_ctx, video->codecpar) < 0)
         return -1;
 
+#ifdef USE_HW
     decoder_ctx->get_format  = get_hw_format;
+#endif
+
     av_opt_set_int(decoder_ctx, "refcounted_frames", 1, 0);
 
+#ifdef USE_HW
     if (hw_decoder_init(decoder_ctx, type) < 0)
         return -1;
+#endif
 
     if ((ret = avcodec_open2(decoder_ctx, decoder, NULL)) < 0) {
         fprintf(stderr, "Failed to open codec for stream #%u\n", video_stream);
@@ -248,9 +272,20 @@ int main(int argc, char *argv[])
 
     if (output_file)
         fclose(output_file);
+
+    /* xzl: from demuxing_decoding.c */
+    printf("Play the output video file with the command:\n"
+               "ffplay -f rawvideo -pix_fmt %s -video_size %dx%d %s\n",
+           av_get_pix_fmt_name(decoder_ctx->pix_fmt),
+           decoder_ctx->width, decoder_ctx->height,
+           argv[3]);
+
     avcodec_free_context(&decoder_ctx);
     avformat_close_input(&input_ctx);
+
+#ifdef USE_HW
     av_buffer_unref(&hw_device_ctx);
+#endif
 
     return 0;
 }

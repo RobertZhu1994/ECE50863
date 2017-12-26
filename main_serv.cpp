@@ -16,6 +16,8 @@ using namespace std;
 namespace po = boost::program_options;
 
 #define H264_FILE "/shared/videos/video-200p-10.mp4"
+//#define H264_FILE "/tmp/output.mkv"
+//#define H264_FILE "/shared/videos/serenity.mp4"
 #define MPG1_FILE "/shared/videos/hst_1.mpg"
 
 struct serv_config {
@@ -129,10 +131,10 @@ int main(int ac, char * av[])
 	/* test with local file */
 	if (!the_config.use_hw) {
 		chunk_desc desc;
-		const char * fname = "/tmp/data.file";
-		recv_one_chunk_tofile(recver, &desc, fname);
-		decode_one_file_sw(fname, sender, desc);
-//		decode_one_file_hw(H264_FILE, sender);
+//		const char * fname = "/tmp/data.file";
+//		recv_one_chunk_tofile(recver, &desc, fname);
+//		decode_one_file_sw(fname, sender, desc);
+		decode_one_file_sw(H264_FILE, sender, desc);
 	}
 	else {
 		chunk_desc desc; /* XXX fill it XXX */
