@@ -138,7 +138,7 @@ int main(int ac, char * av[])
 	EE("connected to sink (frames)");
 
 	// for feedback
-	zmq::socket_t fb_sender(context, ZMQ_PAIR);
+	zmq::socket_t fb_sender(context, ZMQ_PUSH);
 	fb_sender.connect(WORKER_PUSHFB_TO_ADDR);
 	EE("connected to fb");
 

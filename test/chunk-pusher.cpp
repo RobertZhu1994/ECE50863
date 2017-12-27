@@ -111,7 +111,7 @@ int main (int argc, char *argv[])
 //	sender.connect(CLIENT_PUSH_TO_ADDR);
 	sender.bind(CHUNK_PUSH_ADDR);
 
-	zmq::socket_t fb_recv(context, ZMQ_PAIR);
+	zmq::socket_t fb_recv(context, ZMQ_PULL);
 	fb_recv.bind(FB_PULL_ADDR);
 
 	I("bound to %s (fb %s). wait for workers to pull ...",
