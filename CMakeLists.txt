@@ -64,7 +64,8 @@ SET (FFMPEG_LIBS
         swresample
         swscale
         avutil
-#				X11 va-x11 va-drm vdpau va # intel's video accel lib etc
+#				X11 va-x11 va-drm  va # intel's video accel lib etc
+        vdpau  # nvidia decoding & presentation
 )
 
 SET (COMMON_LIBS
@@ -79,6 +80,7 @@ SET (COMMON_LIBS
         lzma
         boost_program_options
         boost_serialization
+        X11
 )
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -120,15 +122,7 @@ add_executable(hw_decode.bin
 		)
 TARGET_LINK_LIBRARIES(hw_decode.bin
         ${FFMPEG_LIBS}
-        m
-        xcb
-        xcb-shm
-        xcb-shape
-        dl
-        bz2
-        z
-        pthread
-        lzma
+        ${COMMON_LIBS}
 		)
 ########################################
 add_executable(demuxing_decoding.bin
@@ -223,8 +217,9 @@ add_custom_command(TARGET ${BINARY} POST_BUILD
 ########################################
 SET(PROGRAM serv)
 add_executable(${PROGRAM}.bin
+        ${HEADERS}
         mydecoder_hw.cpp
-        mydecoder_sw.cpp
+#        mydecoder_sw.cpp       # obsoleted
         rxtx.cpp
         mm.cpp
         measure.c

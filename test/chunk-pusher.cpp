@@ -57,16 +57,16 @@ void load_file(const char *fname, char **p, size_t *sz)
 
 /* create mmap for the whole given file
  * @p: to be unmapped by caller */
-void map_file(const char *fname, char **p, size_t *sz)
+void map_file(const char *fname, uint8_t **p, size_t *sz)
 {
 	/* get file sz */
 	struct stat finfo;
 	int fd = open(fname, O_RDONLY);
-	xzl_bug_on(fd < 0);
+	xzl_bug_on_msg(fd < 0, "failed to open file");
 	int ret = fstat(fd, &finfo);
 	xzl_bug_on(ret != 0);
 
-	char *buff = (char *)mmap(NULL, finfo.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	uint8_t *buff = (uint8_t *)mmap(NULL, finfo.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	xzl_bug_on(buff == MAP_FAILED);
 
 	*p = buff;
@@ -95,7 +95,7 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 	I("desc sent");
 
 	/* send chunk */
-	char * buf;
+	uint8_t * buf;
 	size_t sz;
 	map_file(fname, &buf, &sz);
 
@@ -124,19 +124,21 @@ void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 		xzl_bug("unsupported yuv");
 
 	/* map file */
-	char * buf;
-	size_t sz, offset;
+	uint8_t * buf = nullptr;
+	size_t sz;
 	map_file(fname, &buf, &sz);
+	xzl_bug_on(!buf);
+	auto n_frames = sz / frame_w;  /* # of frames we have */
+	xzl_bug_on(n_frames == 0);
 
-	for (offset = 0; offset < sz; offset += frame_w) {
-		send_one_frame()
-
-		if (offset + frame_w >= sz) { /* last frame. to free the whole buffer */
-
-
-		}
+	/* all frames come from the same mmap'd file. they share the same @hint */
+	auto h = new my_alloc_hint(USE_MMAP_REFCNT, sz, buf, n_frames); /* will be free'd when refcnt drops to 0 */
+	for (auto i = 0u; i < n_frames; i++) {
+		frame_desc fdesc(cdesc.id, i /* frame id */);  /* XXX improve this */
+		send_one_frame_mmap(buf + i * frame_w, frame_w, s, fdesc, h);
 	}
 
+	I("total %lu raw frames from %s", n_frames, fname);
 }
 
 /* argv[1] -- the video file name */
@@ -151,6 +153,9 @@ int main (int argc, char *argv[])
 	zmq::socket_t fb_recv(context, ZMQ_PULL);
 	fb_recv.bind(FB_PULL_ADDR);
 
+	zmq::socket_t s_frame(context, ZMQ_PUSH);
+	s_frame.connect(WORKER_PUSH_TO_ADDR);  /* push raw frames */
+
 	I("bound to %s (fb %s). wait for workers to pull ...",
 		CHUNK_PUSH_ADDR, FB_PULL_ADDR);
 
@@ -158,6 +163,7 @@ int main (int argc, char *argv[])
 	getchar ();
 	printf ("Sending tasks to workers…\n");
 
+#if 0
 	for (int i = 0; i < 20; i++) {
 
 		I("to send chunk %d/20...", i);
@@ -172,5 +178,9 @@ int main (int argc, char *argv[])
 		else
 			I("failed to get fb");
 	}
+#endif
+	chunk_desc cdesc(0, 1000, 100); /* random numbers */
+	send_raw_frames_from_file(argv[1], s_frame, 320, 240, 420, cdesc);
+
 	return 0;
 }

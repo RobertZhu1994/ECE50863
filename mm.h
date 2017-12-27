@@ -5,17 +5,27 @@
 #ifndef VIDEO_STREAMER_MM_H
 #define VIDEO_STREAMER_MM_H
 
+#include <atomic>
 
-#define USE_MALLOC		1
-#define USE_MMAP			2
-#define USE_AVMALLOC 	3
-
+#define USE_MALLOC					1
+#define USE_MMAP						2
+#define USE_AVMALLOC 				3
+#define USE_MMAP_REFCNT			4
 
 struct my_alloc_hint {
+
 	int flag; /* allocation method */
 	size_t length; /* required for mmap. others can be 0 */
 
-	my_alloc_hint(int flag, size_t length) : flag(flag), length(length) {}
+	/* for refcnt'd mmap region */
+	uint8_t *base;  /* may != the pointer to be free'd */
+	std::atomic<int> refcnt;
+
+	my_alloc_hint(int flag, size_t length) : flag(flag), length(length), base(nullptr), refcnt(0) {}
+
+	my_alloc_hint(int flag, size_t length, uint8_t *base, int refcnt) : flag(flag), length(length), base(base),
+																																			refcnt(refcnt) {}
+
 };
 
 /* if hint == null, do nothing. data to be free'd later */

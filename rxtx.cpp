@@ -68,7 +68,10 @@ bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
 	return ret;
 }
 
-/* send a raw frame over
+/* send a raw frame, which is allocated by avmalloc.
+ * the ownership of the frame is moved to zmq, which will free the frame later.
+ *
+ * @fdesc: frame descriptor, content from which will be copied & serailized into the msg
  * @buffer allocated from av_malloc. zmq has to free it */
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 									 frame_desc const & fdesc)
@@ -92,7 +95,7 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 
 		/* send frame */
 
-		auto hint = new my_alloc_hint(USE_AVMALLOC, size);
+		my_alloc_hint *hint = new my_alloc_hint(USE_AVMALLOC, size);
 		zmq::message_t cmsg(buffer, size, my_free, hint);
 		ret = sender.send(cmsg, 0); /* no more msg */
 		xzl_bug_on(!ret);
@@ -108,6 +111,38 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 	return 0;
 }
 
+/* send a raw frame from a mmap'd buffer.
+ * @hint: the info about the mmap'd buffer (inc refcnt) for zmq to perform unmapping
+ *
+ * @others: see above.
+ */
+int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
+												frame_desc const & fdesc, my_alloc_hint * hint)
+{
+	xzl_bug_on(!buffer || !hint);
+
+	/* send frame desc */
+	ostringstream oss;
+	boost::archive::text_oarchive oa(oss);
+
+	oa << fdesc;
+	string s = oss.str();
+
+	zmq::message_t dmsg(s.begin(), s.end());
+	sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
+
+	VV("desc sent");
+
+	/* send the frame */
+
+	zmq::message_t cmsg(buffer, sz, my_free, (void *)hint);
+	auto ret = sender.send(cmsg, 0); /* no more msg */
+	xzl_bug_on(!ret);
+
+	VV("frame sent");
+
+	return 0;
+}
 
 /* recv a desc msg and a chunk msg.
  *

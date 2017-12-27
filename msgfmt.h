@@ -36,8 +36,8 @@ namespace vstreamer {
 	public:
 		chunk_desc() {};
 
-		chunk_desc(uint64_t k, uint64_t l, uint64_t s) :
-				id(k), length_ms(l), size(s) {}
+		chunk_desc(uint64_t key, uint64_t length, uint64_t sz) :
+				id(key), length_ms(length), size(sz) {}
 	};
 
 	struct frame_desc {

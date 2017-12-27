@@ -19,7 +19,16 @@ void my_free(void *data, void *hint)
 		case USE_MALLOC:
 			free(data);
 			break;
+		case USE_MMAP_REFCNT:
+			if (h->refcnt.fetch_sub(1) != 1)
+				return; /* do nothing. don't free @h yet */
+			else { /* refcnt drops to zero, fall through */
+				auto ret = munmap(h->base, h->length);
+				xzl_bug_on(ret != 0);
+			}
+			break;
 		case USE_MMAP: {
+			xzl_bug_on(data != h->base);
 			auto ret = munmap(data, h->length);
 			xzl_bug_on(ret != 0);
 			break;
@@ -27,6 +36,7 @@ void my_free(void *data, void *hint)
 		case USE_AVMALLOC:
 			av_freep(&data);
 			break;
+
 		default:
 			xzl_bug("unsupported?");
 	}

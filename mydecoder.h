@@ -7,6 +7,7 @@
 
 #include <zmq.hpp>
 #include "msgfmt.h"
+#include "mm.h"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -20,6 +21,9 @@ extern "C" {
 
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 									 vstreamer::frame_desc const &desc);
+
+int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
+												vstreamer::frame_desc const & fdesc, my_alloc_hint * hint);
 
 int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 											 vstreamer::chunk_desc const &desc);
