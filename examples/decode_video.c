@@ -112,7 +112,8 @@ int main(int argc, char **argv)
 
     /* find the MPEG-1 video decoder */
 //    codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
-    codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+//    codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    codec = avcodec_find_decoder(AV_CODEC_ID_RAWVIDEO);
 
     if (!codec) {
         fprintf(stderr, "Codec not found\n");

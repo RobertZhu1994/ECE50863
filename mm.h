@@ -10,6 +10,7 @@
 #define USE_MMAP			2
 #define USE_AVMALLOC 	3
 
+
 struct my_alloc_hint {
 	int flag; /* allocation method */
 	size_t length; /* required for mmap. others can be 0 */
@@ -17,6 +18,7 @@ struct my_alloc_hint {
 	my_alloc_hint(int flag, size_t length) : flag(flag), length(length) {}
 };
 
+/* if hint == null, do nothing. data to be free'd later */
 void my_free(void *data, void *hint);
 
 #endif //VIDEO_STREAMER_MM_H

@@ -31,5 +31,5 @@ void my_free(void *data, void *hint)
 			xzl_bug("unsupported?");
 	}
 
-	delete h; /* free hint */
+	delete h; /* free hint -- too expensive? */
 }

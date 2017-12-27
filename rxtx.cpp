@@ -68,7 +68,8 @@ bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
 	return ret;
 }
 
-/* @buffer allocated from av_malloc. zmq has to free it */
+/* send a raw frame over
+ * @buffer allocated from av_malloc. zmq has to free it */
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 									 frame_desc const & fdesc)
 {

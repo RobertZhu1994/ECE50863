@@ -34,7 +34,8 @@ void send_chunks(const char *fname, int k)
 	}
 }
 
-/* @p: allocated by this func, to be free'd by caller */
+/* load the given file contents to mem
+ * @p: allocated by this func, to be free'd by caller */
 void load_file(const char *fname, char **p, size_t *sz)
 {
 	/* get file sz */
@@ -54,7 +55,8 @@ void load_file(const char *fname, char **p, size_t *sz)
 	*sz = s;
 }
 
-/* @p: to be unmapped by caller */
+/* create mmap for the whole given file
+ * @p: to be unmapped by caller */
 void map_file(const char *fname, char **p, size_t *sz)
 {
 	/* get file sz */
@@ -71,7 +73,9 @@ void map_file(const char *fname, char **p, size_t *sz)
 	*sz = finfo.st_size;
 }
 
-void send_one_file(const char *fname, zmq::socket_t & sender)
+/* send the entier file content as two msgs:
+ * a chunk desc; a chunk */
+void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 {
 
 	/* send desc */
@@ -102,6 +106,39 @@ void send_one_file(const char *fname, zmq::socket_t & sender)
 	I("chunk sent");
 }
 
+/* send raw frames (from a raw video file) over. */
+void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
+													 int height, int width, int yuv_mode,
+													 chunk_desc const & cdesc)
+{
+	size_t frame_sz = (size_t) width * (size_t) height;
+	size_t frame_w;
+
+	if (yuv_mode == 420)
+		frame_w = ((frame_sz * 3) / 2);
+	else if (yuv_mode == 422)
+		frame_w = (frame_sz * 2);
+	else if (yuv_mode == 444)
+		frame_w = (frame_sz * 3);
+	else
+		xzl_bug("unsupported yuv");
+
+	/* map file */
+	char * buf;
+	size_t sz, offset;
+	map_file(fname, &buf, &sz);
+
+	for (offset = 0; offset < sz; offset += frame_w) {
+		send_one_frame()
+
+		if (offset + frame_w >= sz) { /* last frame. to free the whole buffer */
+
+
+		}
+	}
+
+}
+
 /* argv[1] -- the video file name */
 int main (int argc, char *argv[])
 {
@@ -124,7 +161,7 @@ int main (int argc, char *argv[])
 	for (int i = 0; i < 20; i++) {
 
 		I("to send chunk %d/20...", i);
-		send_one_file(argv[1], sender);
+		send_chunk_from_file(argv[1], sender);
 
 		/* check fb */
 		I("to recv fb");

@@ -101,8 +101,8 @@ int decode_one_file_sw(const char *fname, zmq::socket_t &sender,
 	xzl_bug_on(!pkt);
 
 	/* find the MPEG-1 video decoder */
-//	codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
-	codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+	codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
+//	codec = avcodec_find_decoder(AV_CODEC_ID_H264);	/* xzl: does not work */
 	xzl_bug_on(!codec);
 
 	parser = av_parser_init(codec->id);
