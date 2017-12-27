@@ -56,6 +56,33 @@ SET(SOURCE
     ${HEADERS}
     )
 
+file (GLOB LIB_SOURCES
+        ${HEADERS}
+        measure.c
+        mm.cpp
+        mydecoder.cpp
+        #        mydecoder_sw.cpp       # obsoleted
+        rxtx.cpp
+        )
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+	add_definitions(-DCONFIG_KAGE_GLOBAL_DEBUG_LEVEL=30)
+    add_definitions(-DDEBUG)
+endif ()
+
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+	add_definitions(-DCONFIG_KAGE_GLOBAL_DEBUG_LEVEL=50)
+	add_definitions(-DNDEBUG)
+endif ()
+
+###########################
+# libs
+# singling these out as their compliation is slow.
+###########################
+add_library(vstreamer STATIC
+    ${LIB_SOURCES}
+)
+
 SET (FFMPEG_LIBS
         avdevice
         avfilter
@@ -64,9 +91,9 @@ SET (FFMPEG_LIBS
         swresample
         swscale
         avutil
-#				X11 va-x11 va-drm  va # intel's video accel lib etc
-#        vdpau  # nvidia decoding & presentation
-)
+        #				X11 va-x11 va-drm  va # intel's video accel lib etc
+        #        vdpau  # nvidia decoding & presentation
+        )
 
 SET (COMMON_LIBS
         m
@@ -81,19 +108,9 @@ SET (COMMON_LIBS
         boost_program_options
         boost_serialization
         X11
-)
+        )
 
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-	add_definitions(-DCONFIG_KAGE_GLOBAL_DEBUG_LEVEL=30)
-    add_definitions(-DDEBUG)
-endif ()
-
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
-	add_definitions(-DCONFIG_KAGE_GLOBAL_DEBUG_LEVEL=50)
-	add_definitions(-DNDEBUG)
-endif ()
-####################################################################################
-
+###########################
 
 #SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/library")
 #SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/library")
@@ -176,6 +193,8 @@ add_executable(${PROGRAM}.bin
         test/${PROGRAM}.cpp
         )
 TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        vstreamer
+        ${FFMPEG_LIBS}
         ${COMMON_LIBS}
         zmq
         )
@@ -183,14 +202,12 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
         COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
-SET(BINARY chunk-pusher.bin)
+SET(BINARY test-chunk-pusher.bin)
 add_executable(${BINARY}
-        mm.cpp
-        rxtx.cpp
-        measure.c
         test/test-chunk-pusher.cpp
         )
 TARGET_LINK_LIBRARIES(${BINARY}
+        vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
         zmq
@@ -199,14 +216,12 @@ add_custom_command(TARGET ${BINARY} POST_BUILD
         COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
-SET(BINARY chunk-puller.bin)
+SET(BINARY test-chunk-puller.bin)
 add_executable(${BINARY}
-        mm.cpp
-        measure.c
-        rxtx.cpp
         test/test-chunk-puller.cpp
         )
 TARGET_LINK_LIBRARIES(${BINARY}
+        vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
         zmq
@@ -217,15 +232,10 @@ add_custom_command(TARGET ${BINARY} POST_BUILD
 ########################################
 SET(PROGRAM serv)
 add_executable(${PROGRAM}.bin
-        ${HEADERS}
-        mydecoder_hw.cpp
-#        mydecoder_sw.cpp       # obsoleted
-        rxtx.cpp
-        mm.cpp
-        measure.c
         main_serv.cpp
         )
 TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
         zmq
@@ -237,11 +247,9 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
 SET(PROGRAM test-fb-sender)
 add_executable(${PROGRAM}.bin
         test/${PROGRAM}.cpp
-        rxtx.cpp
-        mm.cpp
-        measure.c
         )
 TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
         zmq
@@ -253,11 +261,9 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
 SET(PROGRAM test-fb-recver)
 add_executable(${PROGRAM}.bin
         test/${PROGRAM}.cpp
-        rxtx.cpp
-        mm.cpp
-        measure.c
         )
 TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
         zmq
@@ -269,12 +275,9 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
 SET(PROGRAM test-decoder)
 add_executable(${PROGRAM}.bin
         test/${PROGRAM}.cpp
-        rxtx.cpp
-        mm.cpp
-        measure.c
-        mydecoder_hw.cpp
         )
 TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
         zmq

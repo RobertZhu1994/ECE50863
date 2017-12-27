@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "msgfmt.h"
+#include "mydecoder.h"
 #include "log.h"
 
 using namespace vstreamer;

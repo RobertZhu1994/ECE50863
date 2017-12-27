@@ -52,8 +52,14 @@ int main(int ac, char * av[])
 		return -1;
 	}
 
-	av_register_all();
-	avcodec_register_all();
+	if (strncmp(av[1], "sw", 5) == 0)
+		init_decoder(false);
+	else if (strncmp(av[1], "hw", 5) == 0)
+		init_decoder(true);
+	else {
+		fprintf(stderr, "Usage: %s {sw|hw} <input file> <output file>\n", av[0]);
+		return -1;
+	}
 
 	zmq::context_t context (1 /* # of io threads */);
 

@@ -33,7 +33,7 @@ int main (int argc, char *argv[])
 		feedback fb;
 		bool ret = recv_one_fb(fb_recv, &fb, true /* blocking */);
 		if (ret)
-			I("got one fb. id %lu", fb.fid);
+			I("got one fb. id %d", fb.fid);
 		else
 			I("failed to get fb");
 #endif

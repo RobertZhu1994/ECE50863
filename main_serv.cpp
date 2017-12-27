@@ -108,20 +108,13 @@ void parse_options(int ac, char *av[], serv_config* config)
 	}
 }
 
-/* one time ops */
-void init_decoder(void)
-{
-	av_register_all();
-	avcodec_register_all();
-}
-
 #undef _GLIBCXX_DEBUG /* does not get along with program options lib */
 
 int main(int ac, char * av[])
 {
 	parse_options(ac, av, &the_config);
 
-	init_decoder();
+	init_decoder(the_config.use_hw);
 
 	zmq::context_t context (1 /* # of io threads */);
 
@@ -147,33 +140,23 @@ int main(int ac, char * av[])
 
 //	for (int k = 0; k < 20; k++) {
 	while (1) {
-		/* test with local file */
-		if (!the_config.use_hw) {
-			chunk_desc desc;
-			//		const char * fname = "/tmp/data.file";
-			//		recv_one_chunk_tofile(recver, &desc, fname);
-			//		decode_one_file_sw(fname, sender, desc);
-			decode_one_file_sw(H264_FILE, sender, desc);
-		} else {
 			chunk_desc desc; /* XXX fill it XXX */
-#if 1
 //			char fname[] = "/tmp/XXXXXX"; /* template */
 			char fname[] = "/shared/tmp/XXXXXX"; /* template */
 			auto ret = mkstemp(fname);
 			xzl_bug_on(ret == -1);
+
 			recv_one_chunk_tofile(recver, &desc, fname);
 			decode_one_file_hw(fname, sender, desc);
 
 			ret = unlink(fname); /* clean up tmp file */
 			xzl_bug_on(ret != 0);
-#endif
 
 			/* send some fb back */
 			feedback fb(desc.id, fb_cnt++);
 			send_one_fb(fb, fb_sender);
 
 			I("sent one fb");
-		}
 		k2_measure_flush();
 	}
 

@@ -19,6 +19,8 @@ extern "C" {
 #include <libavutil/imgutils.h>
 }
 
+void init_decoder(bool use_hw);
+
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 									 vstreamer::frame_desc const &desc);
 
