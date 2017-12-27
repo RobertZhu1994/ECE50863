@@ -35,4 +35,6 @@ int send_one_fb(vstreamer::feedback const & fb, zmq::socket_t &sender);
 
 bool recv_one_fb(zmq::socket_t &s, vstreamer::feedback * fb, bool blocking);
 
+int recv_one_frame(zmq::socket_t & recv);
+
 #endif //VIDEO_STREAMER_DECODER_H

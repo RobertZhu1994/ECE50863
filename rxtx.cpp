@@ -41,7 +41,7 @@ int send_one_fb(feedback const & fb, zmq::socket_t &sender)
 	if (!ret)
 		EE("send failure");
 	else
-		I("send fb. id = %lu. msg size %lu", fb.fid, sz);
+		I("send fb. id = %d. msg size %lu", fb.fid, sz);
 
 	return 0;
 }
@@ -72,13 +72,28 @@ bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
  * the ownership of the frame is moved to zmq, which will free the frame later.
  *
  * @fdesc: frame descriptor, content from which will be copied & serailized into the msg
- * @buffer allocated from av_malloc. zmq has to free it */
+ * @buffer allocated from av_malloc. zmq has to free it
+ *
+ * if buffer == nullptr, send a desc msg only.
+ */
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 									 frame_desc const & fdesc)
 {
 	int ret;
 
-	xzl_bug_on(!buffer);
+	if (!buffer) {
+		/* send frame desc */
+		ostringstream oss;
+		boost::archive::text_oarchive oa(oss);
+
+		oa << fdesc;
+		string s = oss.str();
+
+		zmq::message_t dmsg(s.begin(), s.end());
+		sender.send(dmsg, 0); /* no more */
+
+		return 0;
+	}
 
 	{
 		/* send frame desc */
@@ -142,6 +157,39 @@ int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
 	VV("frame sent");
 
 	return 0;
+}
+
+/* XXX: do something to the frame.
+ * return: frame id extracted from the desc.  */
+int recv_one_frame(zmq::socket_t & recv) {
+
+	I("start to rx msgs...");
+
+	frame_desc desc;
+
+	{
+		/* recv the desc */
+		zmq::message_t dmsg;
+		recv.recv(&dmsg);
+		I("got desc msg. msg size =%lu", dmsg.size());
+
+		std::string s((char const *)dmsg.data(), dmsg.size()); /* copy over */
+		std::istringstream ss(s);
+		boost::archive::text_iarchive ia(ss);
+
+		ia >> desc;
+		I("cid %lu fid %d", desc.cid, desc.fid);
+	}
+
+	if (desc.fid != -1) {	/* recv the frame */
+		zmq::message_t cmsg;
+		recv.recv(&cmsg);
+		I("got frame msg. size =%lu", cmsg.size());
+
+		xzl_bug_on_msg(cmsg.more(), "there should be no more");
+	}
+
+	return desc.fid;
 }
 
 /* recv a desc msg and a chunk msg.

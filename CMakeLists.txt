@@ -65,7 +65,7 @@ SET (FFMPEG_LIBS
         swscale
         avutil
 #				X11 va-x11 va-drm  va # intel's video accel lib etc
-        vdpau  # nvidia decoding & presentation
+#        vdpau  # nvidia decoding & presentation
 )
 
 SET (COMMON_LIBS
@@ -171,7 +171,7 @@ TARGET_LINK_LIBRARIES(taskwork2.bin
         zmq
         )
 ########################################
-SET(PROGRAM frame-puller)
+SET(PROGRAM test-frame-puller)
 add_executable(${PROGRAM}.bin
         test/${PROGRAM}.cpp
         )
@@ -188,7 +188,7 @@ add_executable(${BINARY}
         mm.cpp
         rxtx.cpp
         measure.c
-        test/chunk-pusher.cpp
+        test/test-chunk-pusher.cpp
         )
 TARGET_LINK_LIBRARIES(${BINARY}
         ${FFMPEG_LIBS}
@@ -204,7 +204,7 @@ add_executable(${BINARY}
         mm.cpp
         measure.c
         rxtx.cpp
-        test/chunk-puller.cpp
+        test/test-chunk-puller.cpp
         )
 TARGET_LINK_LIBRARIES(${BINARY}
         ${FFMPEG_LIBS}
@@ -234,7 +234,7 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
         COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
-SET(PROGRAM fb-sender)
+SET(PROGRAM test-fb-sender)
 add_executable(${PROGRAM}.bin
         test/${PROGRAM}.cpp
         rxtx.cpp
@@ -250,12 +250,29 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
         COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
-SET(PROGRAM fb-recver)
+SET(PROGRAM test-fb-recver)
 add_executable(${PROGRAM}.bin
         test/${PROGRAM}.cpp
         rxtx.cpp
         mm.cpp
         measure.c
+        )
+TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        ${FFMPEG_LIBS}
+        ${COMMON_LIBS}
+        zmq
+        )
+add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
+        COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+        )
+########################################
+SET(PROGRAM test-decoder)
+add_executable(${PROGRAM}.bin
+        test/${PROGRAM}.cpp
+        rxtx.cpp
+        mm.cpp
+        measure.c
+        mydecoder_hw.cpp
         )
 TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         ${FFMPEG_LIBS}

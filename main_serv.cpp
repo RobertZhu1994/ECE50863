@@ -24,7 +24,7 @@ namespace po = boost::program_options;
 #define MPG1_FILE "/shared/videos/hst_1.mpg"
 
 struct serv_config {
-	bool use_hw; /* using hw decoder? */
+	bool 	use_hw; /* using hw decoder? */
 	int 	pull_from_port; /* where we fetch chuncks */
 	int 	push_to_port; 	/* where to push frames */
 

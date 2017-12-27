@@ -1,6 +1,7 @@
 //
 // Created by xzl on 12/24/17.
 //
+// obsoleted. can't decode h264 properly. see mydecoder_hw.cpp
 
 #include "mydecoder.h"
 #include "msgfmt.h"

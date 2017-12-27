@@ -53,12 +53,12 @@ namespace vstreamer {
 
 	public:
 		uint64_t cid;
-		uint64_t fid;
+		int fid;	/* -1 means there's no more frame */
 
 	public:
 		frame_desc() {};
 
-		frame_desc(uint64_t cid, uint64_t fid) :
+		frame_desc(uint64_t cid, int fid) :
 				cid(cid), fid(fid) {};
 
 	};
@@ -73,13 +73,13 @@ namespace vstreamer {
 		enum fb_type type;
 
 		uint64_t cid;
-		uint64_t fid;
+		int fid;
 
 		/* todo: more */
 
 		feedback() {};
 
-		feedback(uint64_t cid, uint64_t fid) : cid(cid), fid(fid) {};
+		feedback(uint64_t cid, int fid) : cid(cid), fid(fid) {};
 
 		template<class Archive>
 		void serialize(Archive &ar, const unsigned int version) {
