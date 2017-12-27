@@ -32,6 +32,8 @@
 #include "log.h"
 #include "mydecoder.h"
 
+using namespace vstreamer;
+
 #ifdef USE_HW
 static AVBufferRef *hw_device_ctx = NULL;
 static enum AVPixelFormat hw_pix_fmt;

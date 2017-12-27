@@ -14,6 +14,7 @@ extern "C" {
 #include "mm.h"
 
 using namespace std;
+using namespace vstreamer;
 
 #if 0
 /* free frame data */
@@ -23,6 +24,49 @@ static void my_free_av (void *data, void *hint)
 	av_freep(&data);
 }
 #endif
+
+int send_one_fb(feedback const & fb, zmq::socket_t &sender)
+{
+	/* send frame desc */
+	ostringstream oss;
+	boost::archive::text_oarchive oa(oss);
+
+	oa << fb;
+	string s = oss.str();
+
+	zmq::message_t dmsg(s.begin(), s.end());
+	auto sz = dmsg.size();
+
+	auto ret = sender.send(dmsg);
+	if (!ret)
+		EE("send failure");
+	else
+		I("send fb. id = %lu. msg size %lu", fb.fid, sz);
+
+	return 0;
+}
+
+/* true if a feedback is recv'd */
+bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
+{
+	zmq::message_t dmsg;
+	xzl_bug_on(!fb);
+
+	bool ret = s.recv(&dmsg, blocking ? 0 : ZMQ_DONTWAIT);
+//	bool ret = s.recv(&dmsg);
+
+	if (ret) {
+		I("got fb msg. msg size =%lu", dmsg.size());
+
+		std::string ss((char const *) dmsg.data(), dmsg.size()); /* copy over */
+		std::istringstream iss(ss);
+		boost::archive::text_iarchive ia(iss);
+
+		ia >> *fb;
+	}
+
+	return ret;
+}
 
 /* @buffer allocated from av_malloc. zmq has to free it */
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
@@ -43,7 +87,7 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 		zmq::message_t dmsg(s.begin(), s.end());
 		sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
 
-		I("desc sent");
+		VV("desc sent");
 
 		/* send frame */
 
@@ -52,7 +96,7 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 		ret = sender.send(cmsg, 0); /* no more msg */
 		xzl_bug_on(!ret);
 
-		I("frame sent");
+		VV("frame sent");
 	}
 
 	/* will free @buffer internally */

@@ -192,6 +192,8 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
 SET(BINARY chunk-pusher.bin)
 add_executable(${BINARY}
         mm.cpp
+        rxtx.cpp
+        measure.c
         test/chunk-pusher.cpp
         )
 TARGET_LINK_LIBRARIES(${BINARY}
@@ -227,6 +229,38 @@ add_executable(${PROGRAM}.bin
         mm.cpp
         measure.c
         main_serv.cpp
+        )
+TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        ${FFMPEG_LIBS}
+        ${COMMON_LIBS}
+        zmq
+        )
+add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
+        COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+        )
+########################################
+SET(PROGRAM fb-sender)
+add_executable(${PROGRAM}.bin
+        test/${PROGRAM}.cpp
+        rxtx.cpp
+        mm.cpp
+        measure.c
+        )
+TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        ${FFMPEG_LIBS}
+        ${COMMON_LIBS}
+        zmq
+        )
+add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
+        COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+        )
+########################################
+SET(PROGRAM fb-recver)
+add_executable(${PROGRAM}.bin
+        test/${PROGRAM}.cpp
+        rxtx.cpp
+        mm.cpp
+        measure.c
         )
 TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         ${FFMPEG_LIBS}

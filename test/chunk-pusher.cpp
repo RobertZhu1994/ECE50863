@@ -20,9 +20,11 @@
 #include "mm.h"
 #include "config.h"
 #include "msgfmt.h"
+#include "mydecoder.h"
 #include "log.h"
 
 using namespace std;
+using namespace vstreamer;
 
 void send_chunks(const char *fname, int k)
 {
@@ -69,14 +71,8 @@ void map_file(const char *fname, char **p, size_t *sz)
 	*sz = finfo.st_size;
 }
 
-void send_one_file(const char *fname)
+void send_one_file(const char *fname, zmq::socket_t & sender)
 {
-	zmq::context_t context (1 /* # io threads */);
-
-	zmq::socket_t sender(context, ZMQ_PUSH);
-	sender.connect(CLIENT_PUSH_TO_ADDR);
-
-	I("connected. start to tx desc ...");
 
 	/* send desc */
 	struct chunk_desc desc(100, 1000, 1000);
@@ -109,6 +105,35 @@ void send_one_file(const char *fname)
 /* argv[1] -- the video file name */
 int main (int argc, char *argv[])
 {
-	send_one_file(argv[1]);
+	zmq::context_t context (1 /* # io threads */);
+
+	zmq::socket_t sender(context, ZMQ_PUSH);
+//	sender.connect(CLIENT_PUSH_TO_ADDR);
+	sender.bind(CHUNK_PUSH_ADDR);
+
+	zmq::socket_t fb_recv(context, ZMQ_PAIR);
+	fb_recv.bind(FB_PULL_ADDR);
+
+	I("bound to %s (fb %s). wait for workers to pull ...",
+		CHUNK_PUSH_ADDR, FB_PULL_ADDR);
+
+	printf ("Press Enter when the workers are ready: ");
+	getchar ();
+	printf ("Sending tasks to workers…\n");
+
+	for (int i = 0; i < 20; i++) {
+
+		I("to send chunk %d/20...", i);
+		send_one_file(argv[1], sender);
+
+		/* check fb */
+		I("to recv fb");
+		feedback fb;
+		bool ret = recv_one_fb(fb_recv, &fb, true /* blocking */);
+		if (ret)
+			I("got one fb. id %lu", fb.fid);
+		else
+			I("failed to get fb");
+	}
 	return 0;
 }

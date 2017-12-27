@@ -19,12 +19,16 @@ extern "C" {
 }
 
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
-									 frame_desc const &desc);
+									 vstreamer::frame_desc const &desc);
 
 int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
-											 chunk_desc const &desc);
+											 vstreamer::chunk_desc const &desc);
 
 int decode_one_file_sw(const char *fname, zmq::socket_t &sender,
-											 chunk_desc const &desc);
+											 vstreamer::chunk_desc const &desc);
+
+int send_one_fb(vstreamer::feedback const & fb, zmq::socket_t &sender);
+
+bool recv_one_fb(zmq::socket_t &s, vstreamer::feedback * fb, bool blocking);
 
 #endif //VIDEO_STREAMER_DECODER_H

@@ -6,6 +6,8 @@
 #include "msgfmt.h"
 #include "log.h"
 
+using namespace vstreamer;
+
 #define INBUF_SIZE (4 * 1024  * 1024)
 //#define INBUF_SIZE (1024)
 

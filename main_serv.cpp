@@ -14,6 +14,8 @@
 #include "msgfmt.h"
 
 using namespace std;
+using namespace vstreamer;
+
 namespace po = boost::program_options;
 
 #define H264_FILE "/shared/videos/video-200p-10.mp4"
@@ -23,6 +25,10 @@ namespace po = boost::program_options;
 
 struct serv_config {
 	bool use_hw; /* using hw decoder? */
+	int 	pull_from_port; /* where we fetch chuncks */
+	int 	push_to_port; 	/* where to push frames */
+
+	serv_config () : use_hw(true), pull_from_port(5556), push_to_port(5557) { }
 };
 
 struct serv_config the_config;
@@ -121,14 +127,25 @@ int main(int ac, char * av[])
 
 	// for incoming encoded chunks
 	zmq::socket_t  recver(context, ZMQ_PULL);
-	recver.bind(SERVER_PULL_ADDR);
+//	recver.bind(SERVER_PULL_ADDR);
+	recver.connect(WORKER_PULL_FROM_ADDR);
+	EE("connected to source (chunks)");
 
 	// for outgoing decoded frames
 	zmq::socket_t  sender(context, ZMQ_PUSH);
-	sender.bind(SERVER_PUSH_ADDR);
+//	sender.bind(SERVER_PUSH_ADDR);
+	sender.connect(WORKER_PUSH_TO_ADDR);
+	EE("connected to sink (frames)");
 
-	I("bound to sockets...");
+	// for feedback
+	zmq::socket_t fb_sender(context, ZMQ_PAIR);
+	fb_sender.connect(WORKER_PUSHFB_TO_ADDR);
+	EE("connected to fb");
 
+//	I("bound to sockets...");
+	int fb_cnt = 0;
+
+//	for (int k = 0; k < 20; k++) {
 	while (1) {
 		/* test with local file */
 		if (!the_config.use_hw) {
@@ -139,10 +156,23 @@ int main(int ac, char * av[])
 			decode_one_file_sw(H264_FILE, sender, desc);
 		} else {
 			chunk_desc desc; /* XXX fill it XXX */
-			const char *fname = "/shared/tmp/data.file";
-//			const char *fname = "/tmp/data.file";
+#if 1
+//			char fname[] = "/tmp/XXXXXX"; /* template */
+			char fname[] = "/shared/tmp/XXXXXX"; /* template */
+			auto ret = mkstemp(fname);
+			xzl_bug_on(ret == -1);
 			recv_one_chunk_tofile(recver, &desc, fname);
 			decode_one_file_hw(fname, sender, desc);
+
+			ret = unlink(fname); /* clean up tmp file */
+			xzl_bug_on(ret != 0);
+#endif
+
+			/* send some fb back */
+			feedback fb(desc.id, fb_cnt++);
+			send_one_fb(fb, fb_sender);
+
+			I("sent one fb");
 		}
 		k2_measure_flush();
 	}
