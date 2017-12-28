@@ -2,8 +2,10 @@
 // Created by xzl on 12/27/17.
 //
 // standalone test for the decode functions
+// it loads a file, decodes it, and sends frames over zmq
+// sink_func in a separate thread recvs the frames
 //
-//
+
 
 #include <zmq.hpp>
 #include <iostream>
