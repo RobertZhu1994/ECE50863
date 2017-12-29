@@ -12,7 +12,7 @@
 #include "mydecoder.h"
 #include "log.h"
 
-using namespace vstreamer;
+using namespace vs;
 
 int main (int argc, char *argv[])
 {

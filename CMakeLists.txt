@@ -50,11 +50,12 @@ file (GLOB HEADERS
 		include/xplane/*.h
 )
 
-SET(SOURCE
-	measure.c
-	mm.cpp
-    ${HEADERS}
-    )
+#SET(SOURCE
+#    measure.c
+#    mm.cpp
+#    lmdb-if.cpp
+#    ${HEADERS}
+#    )
 
 file (GLOB LIB_SOURCES
         ${HEADERS}
@@ -63,6 +64,7 @@ file (GLOB LIB_SOURCES
         mydecoder.cpp
         #        mydecoder_sw.cpp       # obsoleted
         rxtx.cpp
+        lmdb-if.cpp
         )
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -92,7 +94,7 @@ SET (FFMPEG_LIBS
         swscale
         avutil
         #				X11 va-x11 va-drm  va # intel's video accel lib etc
-        #        vdpau  # nvidia decoding & presentation
+                vdpau  # nvidia decoding & presentation
         )
 
 SET (COMMON_LIBS
@@ -210,6 +212,7 @@ TARGET_LINK_LIBRARIES(${BINARY}
         vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
+        lmdb
         zmq
         )
 add_custom_command(TARGET ${BINARY} POST_BUILD

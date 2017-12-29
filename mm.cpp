@@ -27,6 +27,15 @@ void my_free(void *data, void *hint)
 				xzl_bug_on(ret != 0);
 			}
 			break;
+		case USE_LMDB_REFCNT:
+			if (h->refcnt.fetch_sub(1) != 1)
+				return; /* do nothing. don't free @h yet */
+			else {
+				W("close the tx");
+				mdb_cursor_close(h->cursor);
+				mdb_txn_abort(h->txn);
+			}
+			break;
 		case USE_MMAP: {
 			xzl_bug_on(data != h->base);
 			auto ret = munmap(data, h->length);

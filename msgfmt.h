@@ -12,7 +12,10 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
 
-namespace vstreamer {
+namespace vs {
+
+	using cid_t = uint64_t; /* chunk id type */
+
 	struct chunk_desc {
 	private:
 		friend class boost::serialization::access;
@@ -87,15 +90,15 @@ namespace vstreamer {
 			ar & fid;
 		}
 	};
-} // namespace vstreamer
+} // namespace vs
 
 std::shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t &s,
-																							 vstreamer::chunk_desc *desc);
+																							 vs::chunk_desc *desc);
 
-void recv_one_chunk_to_buf(zmq::socket_t & s, vstreamer::chunk_desc *desc,
+void recv_one_chunk_to_buf(zmq::socket_t & s, vs::chunk_desc *desc,
 													 char **p, size_t *sz);
 
-void recv_one_chunk_tofile(zmq::socket_t & s, vstreamer::chunk_desc *desc,
+void recv_one_chunk_tofile(zmq::socket_t & s, vs::chunk_desc *desc,
 													 const char * fname);
 
 #endif //VIDEO_STREAMER_MSGFMT_H

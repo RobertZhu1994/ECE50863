@@ -14,7 +14,7 @@ extern "C" {
 #include "mm.h"
 
 using namespace std;
-using namespace vstreamer;
+using namespace vs;
 
 #if 0
 /* free frame data */
@@ -151,6 +151,33 @@ int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
 	/* send the frame */
 
 	zmq::message_t cmsg(buffer, sz, my_free, (void *)hint);
+	auto ret = sender.send(cmsg, 0); /* no more msg */
+	xzl_bug_on(!ret);
+
+	VV("frame sent");
+
+	return 0;
+}
+
+/* send one buf (chunk) returned from a live lmdb transaction */
+int send_one_chunk_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
+												chunk_desc const & cdesc, my_alloc_hint * hint) {
+	xzl_bug_on(!buffer || !hint);
+
+	/* send frame desc */
+	ostringstream oss;
+	boost::archive::text_oarchive oa(oss);
+
+	oa << cdesc;
+	string s = oss.str();
+
+	zmq::message_t dmsg(s.begin(), s.end());
+	sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
+
+	VV("desc sent");
+
+	/* send the chunk */
+	zmq::message_t cmsg(buffer, sz, my_free, (void *) hint);
 	auto ret = sender.send(cmsg, 0); /* no more msg */
 	xzl_bug_on(!ret);
 

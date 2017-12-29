@@ -14,7 +14,7 @@
 #include "msgfmt.h"
 
 using namespace std;
-using namespace vstreamer;
+using namespace vs;
 
 namespace po = boost::program_options;
 

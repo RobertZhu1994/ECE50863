@@ -9,7 +9,7 @@
 #include "mydecoder.h"
 
 
-using namespace vstreamer;
+using namespace vs;
 
 int main (int argc, char *argv[])
 {

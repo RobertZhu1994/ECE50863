@@ -6,6 +6,8 @@
 #define VIDEO_STREAMER_DECODER_H
 
 #include <zmq.hpp>
+#include <lmdb.h>
+
 #include "msgfmt.h"
 #include "mm.h"
 
@@ -21,22 +23,28 @@ extern "C" {
 
 void init_decoder(bool use_hw);
 
+/* should go to rxtx.h */
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
-									 vstreamer::frame_desc const &desc);
+									 vs::frame_desc const &desc);
 
 int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
-												vstreamer::frame_desc const & fdesc, my_alloc_hint * hint);
+												vs::frame_desc const & fdesc, my_alloc_hint * hint);
 
 int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
-											 vstreamer::chunk_desc const &desc);
+											 vs::chunk_desc const &desc);
 
 int decode_one_file_sw(const char *fname, zmq::socket_t &sender,
-											 vstreamer::chunk_desc const &desc);
+											 vs::chunk_desc const &desc);
 
-int send_one_fb(vstreamer::feedback const & fb, zmq::socket_t &sender);
+int send_one_fb(vs::feedback const & fb, zmq::socket_t &sender);
 
-bool recv_one_fb(zmq::socket_t &s, vstreamer::feedback * fb, bool blocking);
+bool recv_one_fb(zmq::socket_t &s, vs::feedback * fb, bool blocking);
 
 int recv_one_frame(zmq::socket_t & recv);
+
+int send_one_chunk_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
+													 vs::chunk_desc const & cdesc, my_alloc_hint * hint);
+
+unsigned send_chunks_from_db(MDB_env* env, MDB_dbi dbi, vs::cid_t start, vs::cid_t end, zmq::socket_t & s);
 
 #endif //VIDEO_STREAMER_DECODER_H

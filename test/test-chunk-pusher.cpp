@@ -24,7 +24,7 @@
 #include "log.h"
 
 using namespace std;
-using namespace vstreamer;
+using namespace vs;
 
 void send_chunks(const char *fname, int k)
 {
@@ -106,6 +106,40 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 	I("chunk sent");
 }
 
+void test_send_chunks_from_db(const char *dbpath, zmq::socket_t & sender)
+{
+	int rc;
+	MDB_env *env;
+	MDB_dbi dbi;
+	MDB_txn *txn;
+
+	rc = mdb_env_create(&env);
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_env_set_mapsize(env, 1UL * 1024UL * 1024UL * 1024UL); /* 1 GiB */
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_env_open(env, dbpath, 0, 0664);
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_dbi_open(txn, NULL, MDB_INTEGERKEY, &dbi);
+	xzl_bug_on(rc != 0);
+
+	mdb_txn_abort(txn); /* done open the db */
+
+	send_chunks_from_db(env, dbi, 0, 1000 * 1000, sender);
+
+	/* -- wait for all outstanding? -- */
+	sleep (10);
+
+	mdb_dbi_close(env, dbi);
+	mdb_env_close(env);
+}
+
+
 /* send raw frames (from a raw video file) over. */
 void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 													 int height, int width, int yuv_mode,
@@ -139,6 +173,12 @@ void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 	}
 
 	I("total %lu raw frames from %s", n_frames, fname);
+}
+
+void test_send_raw_frames_from_file(const char *fname, zmq::socket_t &s_frame)
+{
+	chunk_desc cdesc(0, 1000, 100); /* random numbers */
+	send_raw_frames_from_file(fname, s_frame, 320, 240, 420, cdesc);
 }
 
 /* argv[1] -- the video file name */
@@ -179,8 +219,10 @@ int main (int argc, char *argv[])
 			I("failed to get fb");
 	}
 #endif
-	chunk_desc cdesc(0, 1000, 100); /* random numbers */
-	send_raw_frames_from_file(argv[1], s_frame, 320, 240, 420, cdesc);
+
+//	test_send_raw_frames_from_file(argv[1], s_frame);
+
+	test_send_chunks_from_db(DB_PATH, sender);
 
 	return 0;
 }

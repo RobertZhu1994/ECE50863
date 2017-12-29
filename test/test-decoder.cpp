@@ -19,7 +19,7 @@
 #include "msgfmt.h"
 
 using namespace std;
-using namespace vstreamer;
+using namespace vs;
 
 /* main func for recv thread */
 static void *sink_func(void *t) {

@@ -11,18 +11,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "log.h"
 
 #include "lmdb.h"
 
 #define LMDB_PATH "/shared/videos/lmdb/"
-
-
-
-char * input_fnames[] = {
-		"/shared/videos/seg/video-200p-10-000.mp4"
-};
 
 int main() {
 
@@ -48,7 +43,7 @@ int main() {
 	rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
 	xzl_bug_on(rc != 0);
 
-	rc = mdb_dbi_open(txn, NULL, 0, &dbi);
+	rc = mdb_dbi_open(txn, NULL, MDB_INTEGERKEY, &dbi);
 	xzl_bug_on(rc != 0);
 
 	/* dump all key/v */
@@ -59,8 +54,8 @@ int main() {
 		rc = mdb_cursor_get(cursor, &key, &data, MDB_NEXT);
 		if (rc == MDB_NOTFOUND)
 			break;
-		I("got one k/v. key: %s, data sz %lu",
-		(const char *)key.mv_data,
+		I("got one k/v. key: %lu, sz %zu data sz %zu",
+		*(uint64_t *)key.mv_data, key.mv_size,
 		data.mv_size);
 
 //		printf("key: %p %.*s, data: %p %.*s\n",

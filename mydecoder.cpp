@@ -32,7 +32,7 @@
 #include "log.h"
 #include "mydecoder.h"
 
-using namespace vstreamer;
+using namespace vs;
 
 /* this is okay: we don't support mix hw/sw in one program. */
 static bool is_use_hw = false;

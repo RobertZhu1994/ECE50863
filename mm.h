@@ -6,11 +6,16 @@
 #define VIDEO_STREAMER_MM_H
 
 #include <atomic>
+#include <lmdb.h>
+
 
 #define USE_MALLOC					1
 #define USE_MMAP						2
 #define USE_AVMALLOC 				3
 #define USE_MMAP_REFCNT			4
+#define USE_LMDB_REFCNT			5
+
+/* generic alloc info for various allocation methods */
 
 struct my_alloc_hint {
 
@@ -20,6 +25,12 @@ struct my_alloc_hint {
 	/* for refcnt'd mmap region */
 	uint8_t *base;  /* may != the pointer to be free'd */
 	std::atomic<int> refcnt;
+
+	/* for lmdb trans */
+	MDB_txn *txn;
+	MDB_cursor *cursor;
+
+	my_alloc_hint(int flag) : flag(flag), refcnt(0) { }
 
 	my_alloc_hint(int flag, size_t length) : flag(flag), length(length), base(nullptr), refcnt(0) {}
 

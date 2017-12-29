@@ -14,7 +14,7 @@
 #include "msgfmt.h"
 #include "log.h"
 
-using namespace vstreamer;
+using namespace vs;
 
 void recv_one_file(const char *fname /* to save */) {
 	zmq::context_t context(1 /* # io threads */);
