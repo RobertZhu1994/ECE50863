@@ -31,6 +31,7 @@
 #include "measure.h"
 #include "log.h"
 #include "mydecoder.h"
+#include "rxtx.h"
 
 using namespace vs;
 

@@ -6,7 +6,7 @@
 #include "log.h"
 #include "msgfmt.h"
 #include "config.h"
-#include "mydecoder.h"
+#include "rxtx.h"
 
 
 using namespace vs;

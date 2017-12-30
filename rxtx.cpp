@@ -2,6 +2,8 @@
 // Created by xzl on 12/23/17.
 //
 
+#include "mydecoder.h"
+#include <lmdb.h>
 #include <sstream>
 #include <zmq.hpp>
 extern "C" {
@@ -12,6 +14,7 @@ extern "C" {
 #include "msgfmt.h"
 #include "log.h"
 #include "mm.h"
+#include "rxtx.h"
 
 using namespace std;
 using namespace vs;
@@ -25,7 +28,94 @@ static void my_free_av (void *data, void *hint)
 }
 #endif
 
-int send_one_fb(feedback const & fb, zmq::socket_t &sender)
+/* recv a desc msg and a chunk msg.
+ *
+ * for the chunk msg,
+ * return a shared ptr of msg, so that we can access its data() later
+ * [ there seems no safe way of moving out its data. ]
+ */
+shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, chunk_desc *desc) {
+	zmq::context_t context(1 /* # io threads */);
+
+	{
+		/* recv the desc */
+		zmq::message_t dmsg;
+		s.recv(&dmsg);
+		I("got desc msg. msg size =%lu", dmsg.size());
+
+		std::string s((char const *)dmsg.data(), dmsg.size()); /* copy over */
+		std::istringstream ss(s);
+		boost::archive::text_iarchive ia(ss);
+
+		ia >> *desc;
+		I("key %lu length_ms %lu", desc->id, desc->length_ms);
+	}
+
+	{
+		/* recv the chunk */
+		auto cmsg = make_shared<zmq::message_t>();
+		xzl_bug_on(!cmsg);
+		auto ret = s.recv(cmsg.get());
+		xzl_bug_on(!ret); /* EAGAIN? */
+		I("got chunk msg. size =%lu", cmsg->size());
+
+		xzl_bug_on_msg(cmsg->more(), "multipart msg should end");
+
+		return cmsg;
+	}
+}
+
+/* recv a desc and a chunk from socket.
+ * @p: [OUT] mem buffer from malloc(). to be free'd by the caller
+ */
+void recv_one_chunk_to_buf(zmq::socket_t & s, chunk_desc *desc,
+char **p, size_t *sz) {
+
+	auto cmsg = recv_one_chunk(s, desc);
+
+	k2_measure("chunk recv'd");
+
+	char * buf = (char *)malloc(cmsg->size());
+	xzl_bug_on(!buf);
+
+	memcpy(buf, cmsg->data(), cmsg->size());
+
+	*p = buf;
+	*sz = cmsg->size();
+
+	/* cmsg will be auto destroyed */
+}
+
+/* recv one chunk, and save it as a new file */
+void recv_one_chunk_tofile(zmq::socket_t & s, chunk_desc *desc,
+const char * fname) {
+
+	xzl_bug_on(!fname);
+
+	char * buf = nullptr;
+	size_t sz;
+	recv_one_chunk_to_buf(s, desc, &buf, &sz);
+
+	I("going to write to file. sz = %lu", sz);
+
+	/* write the chunk to file */
+	FILE *f = fopen(fname, "wb");
+	xzl_bug_on_msg(!f, "failed to cr file");
+	auto ret = fwrite(buf, 1, sz, f);
+	if (ret != sz)
+		perror("failed to write");
+
+	xzl_bug_on(ret != sz);
+	fclose(f);
+	I("written chunk to file %s", fname);
+
+	free(buf);
+
+	k2_measure("file written");
+}
+
+/* XXX */
+/* recv one chunk, and append to an opened file (stream) */int send_one_fb(feedback const & fb, zmq::socket_t &sender)
 {
 	/* send frame desc */
 	ostringstream oss;
@@ -58,14 +148,79 @@ bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
 	if (ret) {
 		I("got fb msg. msg size =%lu", dmsg.size());
 
-		std::string ss((char const *) dmsg.data(), dmsg.size()); /* copy over */
-		std::istringstream iss(ss);
+		string ss((char const *) dmsg.data(), dmsg.size()); /* copy over */
+		istringstream iss(ss);
 		boost::archive::text_iarchive ia(iss);
 
 		ia >> *fb;
 	}
 
 	return ret;
+}
+
+/* no tx is for the db is alive as of now
+ *
+ * @dbi: must be opened already.
+ *
+ * @start/end: inclusive/exclusive
+ *
+ * @return: total chunks sent.
+ * */
+unsigned send_chunks_from_db(MDB_env* env, MDB_dbi dbi, cid_t start, cid_t end, zmq::socket_t & s)
+{
+	MDB_txn *txn;
+	MDB_val key, data;
+	MDB_cursor *cursor;
+	MDB_cursor_op op;
+	int rc;
+
+	rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_cursor_open(txn, dbi, &cursor);
+	xzl_bug_on(rc != 0);
+
+	my_alloc_hint *hint = new my_alloc_hint(USE_LMDB_REFCNT);
+	hint->txn = txn;
+	hint->cursor = cursor;
+
+	int cnt = 0;
+
+	/* once we start to send, the refcnt can be dec by the async sender, which means it can go neg. */
+	while (1) {
+		rc = mdb_cursor_get(cursor, &key, &data, MDB_NEXT);
+		if (rc == MDB_NOTFOUND)
+			break;
+
+		cid_t id = *(cid_t *)key.mv_data;
+
+		if (id >= end)
+			break;
+
+		I("got one k/v. key: %lu, sz %zu data sz %zu",
+			*(uint64_t *)key.mv_data, key.mv_size,
+			data.mv_size);
+
+		chunk_desc desc;
+		desc.id = id;
+		desc.size = key.mv_size;
+		/* XXX more */
+
+		send_one_chunk_from_db((uint8_t *)data.mv_data, data.mv_size, s, desc, hint);
+		cnt ++;
+	}
+
+	/* bump refcnt one time */
+	int before = hint->refcnt.fetch_add(cnt);
+	xzl_bug_on(before < - cnt ); /* impossible */
+
+	if (before == - cnt) { /* meaning that refcnt reaches 0... all outstanding chunks are sent */
+		W("close the tx");
+		mdb_cursor_close(cursor);
+		mdb_txn_abort(txn);
+	}
+
+	return cnt;
 }
 
 /* send a raw frame, which is allocated by avmalloc.
@@ -218,92 +373,3 @@ int recv_one_frame(zmq::socket_t & recv) {
 
 	return desc.fid;
 }
-
-/* recv a desc msg and a chunk msg.
- *
- * for the chunk msg,
- * return a shared ptr of msg, so that we can access its data() later
- * [ there seems no safe way of moving out its data. ]
- */
-shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, chunk_desc *desc) {
-	zmq::context_t context(1 /* # io threads */);
-
-	{
-		/* recv the desc */
-		zmq::message_t dmsg;
-		s.recv(&dmsg);
-		I("got desc msg. msg size =%lu", dmsg.size());
-
-		std::string s((char const *)dmsg.data(), dmsg.size()); /* copy over */
-		std::istringstream ss(s);
-		boost::archive::text_iarchive ia(ss);
-
-		ia >> *desc;
-		I("key %lu length_ms %lu", desc->id, desc->length_ms);
-	}
-
-	{
-		/* recv the chunk */
-		auto cmsg = make_shared<zmq::message_t>();
-		xzl_bug_on(!cmsg);
-		auto ret = s.recv(cmsg.get());
-		xzl_bug_on(!ret); /* EAGAIN? */
-		I("got chunk msg. size =%lu", cmsg->size());
-
-		xzl_bug_on_msg(cmsg->more(), "multipart msg should end");
-
-		return cmsg;
-	}
-}
-
-/* recv a desc and a chunk from socket.
- * @p: [OUT] mem buffer from malloc(). to be free'd by the caller
- */
-void recv_one_chunk_to_buf(zmq::socket_t & s, chunk_desc *desc,
-char **p, size_t *sz) {
-
-	auto cmsg = recv_one_chunk(s, desc);
-
-	k2_measure("chunk recv'd");
-
-	char * buf = (char *)malloc(cmsg->size());
-	xzl_bug_on(!buf);
-
-	memcpy(buf, cmsg->data(), cmsg->size());
-
-	*p = buf;
-	*sz = cmsg->size();
-
-	/* cmsg will be auto destroyed */
-}
-
-/* recv one chunk, and save it as a new file */
-void recv_one_chunk_tofile(zmq::socket_t & s, chunk_desc *desc,
-const char * fname) {
-
-	xzl_bug_on(!fname);
-
-	char * buf = nullptr;
-	size_t sz;
-	recv_one_chunk_to_buf(s, desc, &buf, &sz);
-
-	I("going to write to file. sz = %lu", sz);
-
-	/* write the chunk to file */
-	FILE *f = fopen(fname, "wb");
-	xzl_bug_on_msg(!f, "failed to cr file");
-	auto ret = fwrite(buf, 1, sz, f);
-	if (ret != sz)
-		perror("failed to write");
-
-	xzl_bug_on(ret != sz);
-	fclose(f);
-	I("written chunk to file %s", fname);
-
-	free(buf);
-
-	k2_measure("file written");
-}
-
-/* XXX */
-/* recv one chunk, and append to an opened file (stream) */

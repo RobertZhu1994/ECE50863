@@ -94,7 +94,7 @@ SET (FFMPEG_LIBS
         swscale
         avutil
         #				X11 va-x11 va-drm  va # intel's video accel lib etc
-                vdpau  # nvidia decoding & presentation
+#                vdpau  # nvidia decoding & presentation
         )
 
 SET (COMMON_LIBS
@@ -198,6 +198,7 @@ TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
+        lmdb
         zmq
         )
 add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
@@ -227,6 +228,7 @@ TARGET_LINK_LIBRARIES(${BINARY}
         vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
+        lmdb
         zmq
         )
 add_custom_command(TARGET ${BINARY} POST_BUILD
@@ -241,6 +243,7 @@ TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
+        lmdb
         zmq
         )
 add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
@@ -255,6 +258,7 @@ TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
+        lmdb
         zmq
         )
 add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
@@ -269,6 +273,7 @@ TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
+        lmdb
         zmq
         )
 add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
@@ -283,6 +288,7 @@ TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         vstreamer
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}
+        lmdb
         zmq
         )
 add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD

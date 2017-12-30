@@ -17,6 +17,7 @@
 #include "log.h"
 #include "measure.h"
 #include "msgfmt.h"
+#include "rxtx.h"
 
 using namespace std;
 using namespace vs;

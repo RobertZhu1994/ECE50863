@@ -22,6 +22,7 @@
 #include "msgfmt.h"
 #include "mydecoder.h"
 #include "log.h"
+#include "rxtx.h"
 
 using namespace std;
 using namespace vs;
