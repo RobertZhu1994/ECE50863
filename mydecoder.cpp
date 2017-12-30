@@ -82,7 +82,7 @@ static int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type)
  * the hw decoder workflow
  */
 static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
-												zmq::socket_t & sender, chunk_desc const & cdesc)
+												zmq::socket_t & sender, data_desc const & cdesc)
 {
 	AVFrame *frame = NULL, *sw_frame = NULL;
 	AVFrame *tmp_frame = NULL;
@@ -148,7 +148,7 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 		}
 
 		{
-			frame_desc fdesc(cdesc.id, avctx->frame_number); /* XXX: gen fdesc */
+			data_desc fdesc(cdesc.id, avctx->frame_number); /* XXX: gen fdesc */
 			if ((ret = send_one_frame(buffer, size, sender, fdesc)) <
 					0) { /* will free buffer */
 				fprintf(stderr, "Failed to dump raw data.\n");
@@ -174,7 +174,7 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 
 /* decode one file and write frames to @sender */
 int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
-											 chunk_desc const &cdesc /* chunk info */) {
+											 data_desc const &cdesc /* chunk info */) {
 
 	AVFormatContext *input_ctx = NULL;
 	int video_stream = -1, ret;

@@ -22,7 +22,8 @@ namespace vs {
 
 	using cid_t = uint64_t; /* chunk id type */
 
-	struct chunk_desc {
+#if 0
+	struct data_desc {
 	private:
 		friend class boost::serialization::access;
 
@@ -43,42 +44,62 @@ namespace vs {
 		uint64_t size; /* chunk size, in bytes */
 
 	public:
-		chunk_desc() {};
+		data_desc() {};
 
-		chunk_desc(uint64_t key, uint64_t length, uint64_t sz) :
+		data_desc(uint64_t key, uint64_t length, uint64_t sz) :
 				id(key), length_ms(length), size(sz) {}
 	};
+#endif
 
-	struct frame_desc {
+#if 1
+	enum data_type {
+		DT_CHUNK = 0,
+		DT_RAW_FRAME = 1
+	};
+
+	struct data_desc {
 
 	/* each frame is often hundreds KB. so tens B desc should be fine */
 
 	public:
+		int type;  /* enum data_type */
 		cid_t cid;  /* chunk id */
-		int fid;    /* -1 means there's no more frame */
+
+		/* for DT_RAW_FRAME */
+		int fid;    /* frame id. -1 means invalid, there's no more frame */
 		int width, height;
 		int yuv_mode; /* 420/422/444 */
+
+		/* for DT_CHUNK */
+		int length_ms;
 
 	private:
 		friend class boost::serialization::access;
 
 		template<class Archive>
 		void serialize(Archive &ar, const unsigned int version) {
+			ar & type;
 			ar & cid;
+
 			ar & fid;
 			ar & width;
 			ar & height;
 			ar & yuv_mode;
+
+			ar & length_ms;
 		}
 
-
 	public:
-		frame_desc() {};
+		/* must specify type */
+		data_desc(int type) : type (type) {};
 
-		frame_desc(uint64_t cid, int fid) :
-				cid(cid), fid(fid) {};
+		data_desc() = delete;
+
+//		data_desc(uint64_t cid, int fid) :
+//				cid(cid), fid(fid) {};
 
 	};
+#endif
 
 /* work progress feedback from downstream */
 	enum fb_type {
@@ -107,12 +128,12 @@ namespace vs {
 } // namespace vs
 
 std::shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t &s,
-																							 vs::chunk_desc *desc);
+																							 vs::data_desc *desc);
 
-void recv_one_chunk_to_buf(zmq::socket_t & s, vs::chunk_desc *desc,
+void recv_one_chunk_to_buf(zmq::socket_t & s, vs::data_desc *desc,
 													 char **p, size_t *sz);
 
-void recv_one_chunk_tofile(zmq::socket_t & s, vs::chunk_desc *desc,
+void recv_one_chunk_tofile(zmq::socket_t & s, vs::data_desc *desc,
 													 const char * fname);
 
 #endif //VIDEO_STREAMER_MSGFMT_H

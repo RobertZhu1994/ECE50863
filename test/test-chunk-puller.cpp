@@ -31,7 +31,7 @@ void recv_one_file(const char *fname /* to save */) {
 		I("got desc msg. msg size =%lu", dmsg.size());
 
 		std::string s((char const *)dmsg.data(), dmsg.size()); /* copy over */
-		chunk_desc desc;
+		data_desc desc;
 		std::istringstream ss(s);
 		boost::archive::text_iarchive ia(ss);
 
@@ -70,7 +70,7 @@ void test_recv_one_chunk(const char *fname /* to save */)
 
 	I("bound to socket");
 
-	chunk_desc desc;
+	data_desc desc;
 	recv_one_chunk_tofile(recv, &desc, fname);
 
 	I("written to file %s", fname);

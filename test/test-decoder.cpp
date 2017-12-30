@@ -76,10 +76,10 @@ int main(int ac, char * av[])
 	int rc = pthread_create(&sink, NULL, sink_func, NULL);
 	xzl_bug_on(rc != 0);
 
-	chunk_desc desc;
+	data_desc desc;
 	decode_one_file_hw(fname_in, s, desc);
 
-	frame_desc fdesc(desc.id, -1 /* no more frames */);
+	data_desc fdesc(desc.id, -1 /* no more frames */);
 	send_one_frame(nullptr, 0, s, fdesc);
 
 	rc = pthread_join(sink, nullptr);

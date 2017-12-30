@@ -29,7 +29,7 @@ int main(int ac, char * av[])
 		fb_sender.send(msg);
 		I("%d...", k);
 #else
-		chunk_desc desc;
+		data_desc desc;
 
 		/* send some fb back */
 		feedback fb(desc.id, fb_cnt++);

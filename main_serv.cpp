@@ -142,7 +142,7 @@ int main(int ac, char * av[])
 
 //	for (int k = 0; k < 20; k++) {
 	while (1) {
-			chunk_desc desc; /* XXX fill it XXX */
+			data_desc desc; /* XXX fill it XXX */
 //			char fname[] = "/tmp/XXXXXX"; /* template */
 			char fname[] = "/shared/tmp/XXXXXX"; /* template */
 			auto ret = mkstemp(fname);

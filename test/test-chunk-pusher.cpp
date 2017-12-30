@@ -62,7 +62,7 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 {
 
 	/* send desc */
-	struct chunk_desc desc(100, 1000, 1000);
+	struct data_desc desc(100, 1000, 1000);
 	ostringstream oss;
 	boost::archive::text_oarchive oa(oss);
 
@@ -128,7 +128,7 @@ void test_send_chunks_from_db(const char *dbpath, zmq::socket_t & sender)
 /* send raw frames (from a raw video file) over. */
 void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 													 int height, int width, int yuv_mode,
-													 chunk_desc const & cdesc)
+													 data_desc const & cdesc)
 {
 	size_t frame_sz = (size_t) width * (size_t) height;
 	size_t frame_w;
@@ -153,7 +153,7 @@ void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 	/* all frames come from the same mmap'd file. they share the same @hint */
 	auto h = new my_alloc_hint(USE_MMAP_REFCNT, sz, buf, n_frames); /* will be free'd when refcnt drops to 0 */
 	for (auto i = 0u; i < n_frames; i++) {
-		frame_desc fdesc(cdesc.id, i /* frame id */);  /* XXX improve this */
+		data_desc fdesc(cdesc.id, i /* frame id */);  /* XXX improve this */
 		send_one_frame_mmap(buf + i * frame_w, frame_w, s, fdesc, h);
 	}
 
@@ -162,7 +162,7 @@ void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 
 void test_send_raw_frames_from_file(const char *fname, zmq::socket_t &s_frame)
 {
-	chunk_desc cdesc(0, 1000, 100); /* random numbers */
+	data_desc cdesc(0, 1000, 100); /* random numbers */
 	send_raw_frames_from_file(fname, s_frame, 320, 240, 420, cdesc);
 }
 

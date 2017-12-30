@@ -25,9 +25,9 @@ void init_decoder(bool use_hw);
 
 
 int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
-											 vs::chunk_desc const &desc);
+											 vs::data_desc const &desc);
 
 int decode_one_file_sw(const char *fname, zmq::socket_t &sender,
-											 vs::chunk_desc const &desc);
+											 vs::data_desc const &desc);
 
 #endif //VIDEO_STREAMER_DECODER_H

@@ -34,7 +34,7 @@ static void my_free_av (void *data, void *hint)
  * return a shared ptr of msg, so that we can access its data() later
  * [ there seems no safe way of moving out its data. ]
  */
-shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, chunk_desc *desc) {
+shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
 	zmq::context_t context(1 /* # io threads */);
 
 	{
@@ -68,7 +68,7 @@ shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, chunk_desc *desc) {
 /* recv a desc and a chunk from socket.
  * @p: [OUT] mem buffer from malloc(). to be free'd by the caller
  */
-void recv_one_chunk_to_buf(zmq::socket_t & s, chunk_desc *desc,
+void recv_one_chunk_to_buf(zmq::socket_t & s, data_desc *desc,
 char **p, size_t *sz) {
 
 	auto cmsg = recv_one_chunk(s, desc);
@@ -87,7 +87,7 @@ char **p, size_t *sz) {
 }
 
 /* recv one chunk, and save it as a new file */
-void recv_one_chunk_tofile(zmq::socket_t & s, chunk_desc *desc,
+void recv_one_chunk_tofile(zmq::socket_t & s, data_desc *desc,
 const char * fname) {
 
 	xzl_bug_on(!fname);
@@ -166,7 +166,8 @@ bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
  * @return: total chunks sent.
  * */
 unsigned send_chunks_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
-														 zmq::socket_t &s)
+														 zmq::socket_t &s,
+														 data_desc const &temp_desc /* template */)
 {
 	MDB_txn *txn;
 	MDB_val key, data;
@@ -204,7 +205,7 @@ unsigned send_chunks_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 			*(uint64_t *)key.mv_data, key.mv_size,
 			data.mv_size);
 
-		chunk_desc desc;
+		data_desc desc;
 		desc.id = id;
 		desc.size = key.mv_size;
 		/* XXX more */
@@ -235,7 +236,7 @@ unsigned send_chunks_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
  * if buffer == nullptr, send a desc msg only.
  */
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
-									 frame_desc const & fdesc)
+									 data_desc const & fdesc)
 {
 	int ret;
 
@@ -290,7 +291,7 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
  * @others: see above.
  */
 int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
-												frame_desc const & fdesc, my_alloc_hint * hint)
+												data_desc const & fdesc, my_alloc_hint * hint)
 {
 	xzl_bug_on(!buffer || !hint);
 
@@ -319,7 +320,7 @@ int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
 
 /* send one buf (chunk) returned from a live lmdb transaction */
 int send_one_chunk_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
-												chunk_desc const & cdesc, my_alloc_hint * hint) {
+												data_desc const & cdesc, my_alloc_hint * hint) {
 	xzl_bug_on(!buffer || !hint);
 
 	/* send frame desc */
@@ -354,7 +355,7 @@ int recv_one_frame(zmq::socket_t & recv, size_t* sz) {
 
 	I("start to rx msgs...");
 
-	frame_desc desc;
+	data_desc desc;
 
 	{
 		/* recv the desc */
