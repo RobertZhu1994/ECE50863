@@ -183,10 +183,10 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 	AVCodec *decoder = NULL;
 	AVPacket packet;
 
-	enum AVHWDeviceType type;
-	const char * devname = "cuda"; // "cuda" "vdpau"
-
 //	av_register_all();
+
+	enum AVHWDeviceType type = AV_HWDEVICE_TYPE_NONE;
+	const char * devname = "cuda"; // "cuda" "vdpau"
 
 	k2_measure("decode start");
 

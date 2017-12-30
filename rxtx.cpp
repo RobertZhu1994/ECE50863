@@ -114,8 +114,7 @@ const char * fname) {
 	k2_measure("file written");
 }
 
-/* XXX */
-/* recv one chunk, and append to an opened file (stream) */int send_one_fb(feedback const & fb, zmq::socket_t &sender)
+int send_one_fb(feedback const & fb, zmq::socket_t &sender)
 {
 	/* send frame desc */
 	ostringstream oss;
@@ -136,7 +135,7 @@ const char * fname) {
 	return 0;
 }
 
-/* true if a feedback is recv'd */
+/* return: true if a feedback is recv'd */
 bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
 {
 	zmq::message_t dmsg;
@@ -158,7 +157,7 @@ bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
 	return ret;
 }
 
-/* no tx is for the db is alive as of now
+/* caller must ensure: no tx is for the db is alive as of now
  *
  * @dbi: must be opened already.
  *
@@ -166,13 +165,16 @@ bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
  *
  * @return: total chunks sent.
  * */
-unsigned send_chunks_from_db(MDB_env* env, MDB_dbi dbi, cid_t start, cid_t end, zmq::socket_t & s)
+unsigned send_chunks_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
+														 zmq::socket_t &s)
 {
 	MDB_txn *txn;
 	MDB_val key, data;
 	MDB_cursor *cursor;
 	MDB_cursor_op op;
 	int rc;
+
+	xzl_assert(env);
 
 	rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
 	xzl_bug_on(rc != 0);
@@ -186,7 +188,8 @@ unsigned send_chunks_from_db(MDB_env* env, MDB_dbi dbi, cid_t start, cid_t end, 
 
 	int cnt = 0;
 
-	/* once we start to send, the refcnt can be dec by the async sender, which means it can go neg. */
+	/* once we start to send, the refcnt can be dec by the async sender,
+	 * which means it can go neg. */
 	while (1) {
 		rc = mdb_cursor_get(cursor, &key, &data, MDB_NEXT);
 		if (rc == MDB_NOTFOUND)
@@ -197,7 +200,7 @@ unsigned send_chunks_from_db(MDB_env* env, MDB_dbi dbi, cid_t start, cid_t end, 
 		if (id >= end)
 			break;
 
-		I("got one k/v. key: %lu, sz %zu data sz %zu",
+		I("loaded one k/v. key: %lu, sz %zu data sz %zu",
 			*(uint64_t *)key.mv_data, key.mv_size,
 			data.mv_size);
 
@@ -332,7 +335,8 @@ int send_one_chunk_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 	VV("desc sent");
 
 	/* send the chunk */
-	zmq::message_t cmsg(buffer, sz, my_free, (void *) hint);
+	zmq::message_t cmsg(buffer, sz,
+											my_free /* our deallocation func */, (void *) hint);
 	auto ret = sender.send(cmsg, 0); /* no more msg */
 	xzl_bug_on(!ret);
 
@@ -342,8 +346,11 @@ int send_one_chunk_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 }
 
 /* XXX: do something to the frame.
- * return: frame id extracted from the desc.  */
-int recv_one_frame(zmq::socket_t & recv) {
+ * @sz: [out] the recv'd frame size, in bytes.
+ * return: frame id extracted from the desc.
+ * = -1 if this is the last frame (no actual data)
+ * */
+int recv_one_frame(zmq::socket_t & recv, size_t* sz) {
 
 	I("start to rx msgs...");
 
@@ -369,6 +376,12 @@ int recv_one_frame(zmq::socket_t & recv) {
 		I("got frame msg. size =%lu", cmsg.size());
 
 		xzl_bug_on_msg(cmsg.more(), "there should be no more");
+
+		if (sz)
+			*sz = cmsg.size();
+	} else {
+		if (sz)
+			*sz = 0;
 	}
 
 	return desc.fid;

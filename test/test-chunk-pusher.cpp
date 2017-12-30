@@ -107,6 +107,8 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 	I("chunk sent");
 }
 
+/* given key range, load all the chunks from the db, and send them out as
+ * msgs (desc + chunk for each) */
 void test_send_chunks_from_db(const char *dbpath, zmq::socket_t & sender)
 {
 	int rc;
@@ -129,9 +131,9 @@ void test_send_chunks_from_db(const char *dbpath, zmq::socket_t & sender)
 	rc = mdb_dbi_open(txn, NULL, MDB_INTEGERKEY, &dbi);
 	xzl_bug_on(rc != 0);
 
-	mdb_txn_abort(txn); /* done open the db */
+	mdb_txn_commit(txn); /* done open the db */
 
-	send_chunks_from_db(env, dbi, 0, 1000 * 1000, sender);
+	send_chunks_from_db(env, dbi, 0, 1000 * 1000 * 1000, sender);
 
 	/* -- wait for all outstanding? -- */
 	sleep (10);

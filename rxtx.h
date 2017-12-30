@@ -24,6 +24,6 @@ int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
 int send_one_chunk_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 													 vs::chunk_desc const & cdesc, my_alloc_hint * hint);
 
-int recv_one_frame(zmq::socket_t & recv);
+int recv_one_frame(zmq::socket_t & recv, size_t* sz = nullptr);
 
 #endif //VIDEO_STREAMER_RXTX_H

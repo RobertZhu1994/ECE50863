@@ -25,7 +25,7 @@ namespace po = boost::program_options;
 #define MPG1_FILE "/shared/videos/hst_1.mpg"
 
 struct serv_config {
-	bool 	use_hw; /* using hw decoder? */
+	bool 	use_hw = false; /* using hw decoder? */
 	int 	pull_from_port; /* where we fetch chuncks */
 	int 	push_to_port; 	/* where to push frames */
 
@@ -63,7 +63,8 @@ void parse_options(int ac, char *av[], serv_config* config)
 
 		if (vm.count("hw-decode")) {
 			config->use_hw = true;
-		}
+		} else
+			config->use_hw = false;
 
 //		if (vm.count("record_size")) {
 //			config->record_size = vm["record_size"].as<unsigned long>();
