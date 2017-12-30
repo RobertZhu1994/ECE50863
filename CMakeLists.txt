@@ -295,3 +295,17 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
         COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
+SET(PROGRAM test-lmdb-build)
+add_executable(${PROGRAM}.bin
+        test/${PROGRAM}.cpp
+        )
+TARGET_LINK_LIBRARIES(${PROGRAM}.bin
+        vstreamer
+        ${FFMPEG_LIBS}
+        ${COMMON_LIBS}
+        lmdb
+        )
+add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
+        COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+        )
+########################################

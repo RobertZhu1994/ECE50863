@@ -56,24 +56,6 @@ void load_file(const char *fname, char **p, size_t *sz)
 	*sz = s;
 }
 
-/* create mmap for the whole given file
- * @p: to be unmapped by caller */
-void map_file(const char *fname, uint8_t **p, size_t *sz)
-{
-	/* get file sz */
-	struct stat finfo;
-	int fd = open(fname, O_RDONLY);
-	xzl_bug_on_msg(fd < 0, "failed to open file");
-	int ret = fstat(fd, &finfo);
-	xzl_bug_on(ret != 0);
-
-	uint8_t *buff = (uint8_t *)mmap(NULL, finfo.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	xzl_bug_on(buff == MAP_FAILED);
-
-	*p = buff;
-	*sz = finfo.st_size;
-}
-
 /* send the entier file content as two msgs:
  * a chunk desc; a chunk */
 void send_chunk_from_file(const char *fname, zmq::socket_t & sender)

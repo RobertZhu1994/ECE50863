@@ -42,4 +42,6 @@ struct my_alloc_hint {
 /* if hint == null, do nothing. data to be free'd later */
 void my_free(void *data, void *hint);
 
+void map_file(const char *fname, uint8_t **p, size_t *sz);
+
 #endif //VIDEO_STREAMER_MM_H

@@ -7,6 +7,8 @@
 
 /* This launches a dedicated thread that executes the given func
  * periodically.
+ *
+ * example: see getStatistics
  */
 
 #ifndef VS_CALLBACKTIMER_H

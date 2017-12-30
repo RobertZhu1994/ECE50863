@@ -2,12 +2,15 @@
 // Created by xzl on 12/25/17.
 //
 
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 extern "C" {
 #include <libavutil/mem.h>
 }
 #include "log.h"
 #include "mm.h"
+
 
 void my_free(void *data, void *hint)
 {
@@ -51,4 +54,23 @@ void my_free(void *data, void *hint)
 	}
 
 	delete h; /* free hint -- too expensive? */
+}
+
+
+/* create mmap for the whole given file
+ * @p: to be unmapped by caller */
+void map_file(const char *fname, uint8_t **p, size_t *sz)
+{
+	/* get file sz */
+	struct stat finfo;
+	int fd = open(fname, O_RDONLY);
+	xzl_bug_on_msg(fd < 0, "failed to open file");
+	int ret = fstat(fd, &finfo);
+	xzl_bug_on(ret != 0);
+
+	uint8_t *buff = (uint8_t *)mmap(NULL, finfo.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	xzl_bug_on(buff == MAP_FAILED);
+
+	*p = buff;
+	*sz = finfo.st_size;
 }

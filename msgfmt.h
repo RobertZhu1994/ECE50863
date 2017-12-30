@@ -2,7 +2,13 @@
 // Created by xzl on 12/24/17.
 //
 
-/* serialization code from boost example */
+/* serialization code from boost example
+ *
+ * NOTE: if the serialization becomes a perf hotspot, try YAS
+ * https://github.com/thekvs/cpp-serializers
+ * https://github.com/niXman/yas
+ *
+ * */
 
 #ifndef VIDEO_STREAMER_MSGFMT_H
 #define VIDEO_STREAMER_MSGFMT_H
@@ -45,6 +51,14 @@ namespace vs {
 
 	struct frame_desc {
 
+	/* each frame is often hundreds KB. so tens B desc should be fine */
+
+	public:
+		cid_t cid;  /* chunk id */
+		int fid;    /* -1 means there's no more frame */
+		int width, height;
+		int yuv_mode; /* 420/422/444 */
+
 	private:
 		friend class boost::serialization::access;
 
@@ -52,11 +66,11 @@ namespace vs {
 		void serialize(Archive &ar, const unsigned int version) {
 			ar & cid;
 			ar & fid;
+			ar & width;
+			ar & height;
+			ar & yuv_mode;
 		}
 
-	public:
-		uint64_t cid;
-		int fid;	/* -1 means there's no more frame */
 
 	public:
 		frame_desc() {};
