@@ -296,6 +296,7 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 	return 0;
 }
 
+#if 0 /* tbd */
 /* return: # of stream info sent */
 extern stream_desc all_streams[]; /* in stream-info.cpp */
 int send_all_stream_info(zmq::socket_t & sender)
@@ -320,6 +321,7 @@ int send_all_stream_info(zmq::socket_t & sender)
 	}
 	return cnt;
 }
+#endif
 
 /* send a raw frame from a mmap'd buffer.
  * @hint: the info about the mmap'd buffer (inc refcnt) for zmq to perform unmapping
