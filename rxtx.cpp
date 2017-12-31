@@ -35,7 +35,7 @@ static void my_free_av (void *data, void *hint)
  * [ there seems no safe way of moving out its data. ]
  */
 shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
-	zmq::context_t context(1 /* # io threads */);
+//	zmq::context_t context(1 /* # io threads */);
 
 	{
 		/* recv the desc */
@@ -190,7 +190,7 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 	hint->txn = txn;
 	hint->cursor = cursor;
 
-	int cnt = 0;
+	unsigned cnt = 0; /* also used as seq number */
 
 	/* once we start to send, the refcnt can be dec by the async sender,
 	 * which means it can go neg. */
@@ -208,13 +208,16 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 			*(uint64_t *)key.mv_data, key.mv_size,
 			data.mv_size);
 
-		data_desc desc(temp_desc); /* copy ctor */
+		data_desc desc(temp_desc); /* make a desc out of the template */
+
+		desc.cid = id;
+
 		switch (desc.type) {
 			case TYPE_RAW_FRAME:
-				desc.cid = id;
+				desc.f_seq = cnt;
 				break;
 			case TYPE_CHUNK:
-				/* XXX */
+				desc.c_seq = cnt;
 				break;
 			default:
 				xzl_bug("???");
@@ -225,11 +228,13 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 		cnt ++;
 	}
 
-	/* bump refcnt one time */
-	int before = hint->refcnt.fetch_add(cnt);
-	xzl_bug_on(before < - cnt ); /* impossible */
+	/* for mm
+	 * bump refcnt one time */
+	long before = hint->refcnt.fetch_add(cnt);
+	xzl_bug_on(before < - (long)cnt); /* impossible */
 
-	if (before == - cnt) { /* meaning that refcnt reaches 0... all outstanding chunks are sent */
+	if (before == - (long)cnt) {
+		/* meaning that refcnt reaches 0... all outstanding chunks are sent */
 		W("close the tx");
 		mdb_cursor_close(cursor);
 		mdb_txn_abort(txn);
@@ -238,13 +243,15 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 	return cnt;
 }
 
-/* send a raw frame, which is allocated by avmalloc.
+/* send a decoded frame as one message with two parts,
+ * in which the frame buffer is allocated by avmalloc.
+ *
  * the ownership of the frame is moved to zmq, which will free the frame later.
  *
  * @fdesc: frame descriptor, content from which will be copied & serailized into the msg
  * @buffer allocated from av_malloc. zmq has to free it
  *
- * if buffer == nullptr, send a desc msg only.
+ * if buffer == nullptr, send the desc only (and indicate no more msg)
  */
 int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 									 data_desc const & fdesc)
@@ -279,7 +286,6 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 		VV("desc sent");
 
 		/* send frame */
-
 		my_alloc_hint *hint = new my_alloc_hint(USE_AVMALLOC, size);
 		zmq::message_t cmsg(buffer, size, my_free, hint);
 		ret = sender.send(cmsg, 0); /* no more msg */
@@ -389,18 +395,20 @@ int send_one_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 
 /* XXX: do something to the frame.
  * @sz: [out] the recv'd frame size, in bytes.
- * return: frame id extracted from the desc.
+ * @fdesc: [out]
+ *
+ * return: frame seq extracted from the desc.
  * = -1 if this is the last frame (no actual data)
  * */
-int recv_one_frame(zmq::socket_t & recv, size_t* sz) {
+unsigned recv_one_frame(zmq::socket_t & recv, size_t* sz, data_desc *fdesc) {
 
 	I("start to rx msgs...");
 
-	data_desc desc(TYPE_RAW_FRAME);
+	data_desc desc;
+	zmq::message_t dmsg;
 
 	{
 		/* recv the desc */
-		zmq::message_t dmsg;
 		recv.recv(&dmsg);
 		I("got desc msg. msg size =%lu", dmsg.size());
 
@@ -409,10 +417,11 @@ int recv_one_frame(zmq::socket_t & recv, size_t* sz) {
 		boost::archive::text_iarchive ia(ss);
 
 		ia >> desc;
-		I("cid %lu fid %d", desc.cid.as_uint, desc.fid);
+		I("type %s cid %lu c_seq %d f_seq %d",
+			data_type_str[desc.type], desc.cid.as_uint, desc.c_seq, desc.f_seq);
 	}
 
-	if (desc.fid != -1) {	/* recv the frame */
+	if (dmsg.more()) {	/* there's a frame for the desc. get it. */
 		zmq::message_t cmsg;
 		recv.recv(&cmsg);
 		I("got frame msg. size =%lu", cmsg.size());
@@ -426,5 +435,51 @@ int recv_one_frame(zmq::socket_t & recv, size_t* sz) {
 			*sz = 0;
 	}
 
-	return desc.fid;
+	if (fdesc)
+		*fdesc = desc;
+
+	return desc.f_seq;
+}
+
+/* return a shared_ptr of the msg, which can be free'd later */
+shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, data_desc *fdesc) {
+
+	I("start to rx msgs...");
+
+	data_desc desc;
+	zmq::message_t dmsg;
+
+	shared_ptr<zmq::message_t> cmsg = nullptr;
+
+	{
+		/* recv the desc */
+		recv.recv(&dmsg);
+		I("got desc msg. msg size =%lu", dmsg.size());
+
+		std::string s((char const *)dmsg.data(), dmsg.size()); /* copy over */
+		std::istringstream ss(s);
+		boost::archive::text_iarchive ia(ss);
+
+		ia >> desc;
+		I("type %s cid %lu c_seq %d f_seq %d",
+			data_type_str[desc.type], desc.cid.as_uint, desc.c_seq, desc.f_seq);
+	}
+
+	if (dmsg.more()) {	/* there's a frame for the desc. get it. */
+
+		cmsg = make_shared<zmq::message_t>();
+		xzl_bug_on(!cmsg);
+
+		auto ret = recv.recv(cmsg.get());
+		xzl_bug_on(!ret); /* EAGAIN? */
+		I("got chunk msg. size =%lu", cmsg->size());
+
+		xzl_bug_on_msg(cmsg->more(), "there should be no more");
+	}
+
+	if (fdesc)
+		*fdesc = desc;
+
+	return cmsg;
+
 }

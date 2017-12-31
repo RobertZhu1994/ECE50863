@@ -93,8 +93,12 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 	I("chunk sent");
 }
 
-/* given key range, load all the chunks from the db, and send them out as
- * msgs (desc + chunk for each) */
+/* load all the chunks in a key range from the db, and send them out as
+ * msgs (desc + chunk for each)
+ *
+ * this can be used for sending either encoded chunks or raw frames.
+ *
+ */
 void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int type)
 {
 	int rc;

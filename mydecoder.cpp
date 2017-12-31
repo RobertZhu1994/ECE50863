@@ -148,9 +148,11 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 		}
 
 		{
-			data_desc fdesc(TYPE_RAW_FRAME);
-			fdesc.cid = cdesc.cid;
-			fdesc.fid = avctx->frame_number; /* XXX: gen fdesc */
+			data_desc fdesc(TYPE_DECODED_FRAME);
+			fdesc.cid = cdesc.cid; /* inherit the chunk's cid */
+			fdesc.c_seq = cdesc.c_seq; /* inherit chunk seq */
+			fdesc.f_seq = avctx->frame_number;
+
 			if ((ret = send_one_frame(buffer, size, sender, fdesc)) <
 					0) { /* will free buffer */
 				fprintf(stderr, "Failed to dump raw data.\n");
@@ -284,6 +286,18 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 	packet.data = NULL;
 	packet.size = 0;
 	ret = decode_write_hw(decoder_ctx, &packet, sender, cdesc);
+
+	{
+		/* send the final desc with no frame, marking the end of the chunk */
+		data_desc fdesc(TYPE_DECODED_FRAME);
+
+		fdesc.cid = cdesc.cid; /* inherit the chunk's cid */
+		fdesc.c_seq = cdesc.c_seq; /* inherit chunk seq */
+		fdesc.f_seq = decoder_ctx->frame_number + 1;
+
+		ret = send_one_frame(nullptr, 0, sender, fdesc);
+		xzl_bug_on(ret != 0);
+	}
 
 	k2_measure("decode/send end");
 

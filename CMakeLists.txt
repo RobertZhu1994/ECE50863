@@ -222,7 +222,7 @@ add_custom_command(TARGET ${BINARY} POST_BUILD
 ########################################
 SET(PROGRAM serv)
 add_executable(${PROGRAM}.bin
-        main_serv.cpp
+        decode-serv.cpp
         )
 TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         vstreamer

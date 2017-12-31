@@ -24,7 +24,7 @@ struct my_alloc_hint {
 
 	/* for refcnt'd mmap region */
 	uint8_t *base;  /* may != the pointer to be free'd */
-	std::atomic<int> refcnt;
+	std::atomic<long> refcnt; /* can reach neg. must be long since delta is unsigned */
 
 	/* for lmdb trans */
 	MDB_txn *txn;
