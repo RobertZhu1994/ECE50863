@@ -33,6 +33,10 @@ static void my_free_av (void *data, void *hint)
  * for the chunk msg,
  * return a shared ptr of msg, so that we can access its data() later
  * [ there seems no safe way of moving out its data. ]
+ *
+ * if the desc indicates eof of a chunk seq, there will be no chunk data.
+ * in that case, @desc will be filled but nullptr will be returned.
+ *
  */
 shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
 //	zmq::context_t context(1 /* # io threads */);
@@ -48,7 +52,15 @@ shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
 		boost::archive::text_iarchive ia(ss);
 
 		ia >> *desc;
-		I("key %lu length_ms %d", desc->cid.as_uint, desc->length_ms);
+		I("%s", desc->to_string().c_str());
+
+		if (desc->type == TYPE_CHUNK_EOF) {
+			xzl_bug_on(dmsg.more());
+			return nullptr;
+		} else {
+			xzl_bug_on(desc->type != TYPE_CHUNK); /* can't be anything else */
+			xzl_bug_on(!dmsg.more()); /* there must be data */
+		}
 	}
 
 	{
@@ -66,52 +78,75 @@ shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
 }
 
 /* recv a desc and a chunk from socket.
+ *
+ * this does memcpy since we assume encoded chunks won't be too large.
+ * However, @recv_one_chunk() enables zero-copy if that's desirable.
+ *
  * @p: [OUT] mem buffer from malloc(). to be free'd by the caller
  */
-void recv_one_chunk_to_buf(zmq::socket_t & s, data_desc *desc,
-char **p, size_t *sz) {
+void recv_one_chunk_to_buf(zmq::socket_t &s, data_desc *desc,
+													 char **p, size_t *sz) {
 
 	auto cmsg = recv_one_chunk(s, desc);
 
 	k2_measure("chunk recv'd");
 
-	char * buf = (char *)malloc(cmsg->size());
-	xzl_bug_on(!buf);
+	if (cmsg) {
+		char *buf = (char *) malloc(cmsg->size());
+		xzl_bug_on(!buf);
 
-	memcpy(buf, cmsg->data(), cmsg->size());
+		memcpy(buf, cmsg->data(), cmsg->size());
 
-	*p = buf;
-	*sz = cmsg->size();
-
-	/* cmsg will be auto destroyed */
+		*p = buf;
+		*sz = cmsg->size();
+		/* cmsg will be auto destroyed */
+	} else { /* we only got a desc. no chunk data */
+		*p = nullptr;
+		*sz = 0;
+	}
 }
 
-/* recv one chunk, and save it as a new file */
-void recv_one_chunk_tofile(zmq::socket_t & s, data_desc *desc,
-const char * fname) {
+/* recv one chunk, and save it as a new file.
+ *
+ * return: 0 if the chunk is saved.
+ * -1 if no chunk recv'd and this is just eof.
+ *
+ * XXX directly use msg.data(), instead of a copied buffer */
+int recv_one_chunk_tofile(zmq::socket_t &s, data_desc *desc,
+													const char *fname) {
 
 	xzl_bug_on(!fname);
 
 	char * buf = nullptr;
 	size_t sz;
 	recv_one_chunk_to_buf(s, desc, &buf, &sz);
+	int ret;
 
-	I("going to write to file. sz = %lu", sz);
+	if (buf) {
+		I("going to write to file. sz = %lu", sz);
 
-	/* write the chunk to file */
-	FILE *f = fopen(fname, "wb");
-	xzl_bug_on_msg(!f, "failed to cr file");
-	auto ret = fwrite(buf, 1, sz, f);
-	if (ret != sz)
-		perror("failed to write");
+		/* write the chunk to file */
+		FILE *f = fopen(fname, "wb");
+		xzl_bug_on_msg(!f, "failed to cr file");
+		auto ret = fwrite(buf, 1, sz, f);
+		if (ret != sz)
+			perror("failed to write");
 
-	xzl_bug_on(ret != sz);
-	fclose(f);
-	I("written chunk to file %s", fname);
+		xzl_bug_on(ret != sz);
+		fclose(f);
+		I("written chunk to file %s", fname);
 
-	free(buf);
+		free(buf);
+		ret = 0;
 
-	k2_measure("file written");
+		k2_measure("file written");
+
+	} else {
+		xzl_assert(sz == 0);
+		ret = -1;
+	}
+
+	return ret;
 }
 
 int send_one_fb(feedback const & fb, zmq::socket_t &sender)
@@ -226,6 +261,18 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 		/* XXX more. check desc.type and fill in the rest of the desc... */
 		send_one_from_db((uint8_t *)data.mv_data, data.mv_size, s, desc, hint);
 		cnt ++;
+	}
+
+	/* send the eof -- depending whether we are sending frames or chunks */
+	switch (temp_desc.type) {
+		case TYPE_RAW_FRAME:
+			send_raw_eof(temp_desc.cid, cnt, s);
+			break;
+		case TYPE_CHUNK:
+			send_chunk_eof(temp_desc.cid, cnt, s);
+			break;
+		default:
+			xzl_bug("???");
 	}
 
 	/* for mm
@@ -393,12 +440,46 @@ int send_one_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 	return 0;
 }
 
+/* send the final desc with no frame, marking the end of a frame seq (e.g. a chunk?) */
+
+void send_chunk_eof(cid_t const & cid, unsigned int chunk_seq, zmq::socket_t & sender) {
+	data_desc desc(TYPE_CHUNK_EOF);
+
+	desc.cid.stream_id = cid.stream_id; /* only stream id matters */
+	desc.c_seq = chunk_seq;
+
+	auto ret = send_one_frame(nullptr, 0, sender, desc);
+	xzl_bug_on(ret != 0);
+}
+
+void send_raw_eof(cid_t const & cid, unsigned int frame_seq, zmq::socket_t & sender) {
+	data_desc desc(TYPE_RAW_FRAME_EOF);
+
+	desc.cid.stream_id = cid.stream_id; /* only stream id matters */
+	/* chunk seq does not matter? */
+	desc.f_seq = frame_seq;
+
+	auto ret = send_one_frame(nullptr, 0, sender, desc);
+	xzl_bug_on(ret != 0);
+}
+
+void send_decoded_eof(cid_t const & cid, unsigned int chunk_seq, unsigned int frame_seq, zmq::socket_t & sender) {
+
+	data_desc desc(TYPE_DECODED_FRAME_EOF);
+
+	desc.cid.stream_id = cid.stream_id; /* only stream id matters */
+	desc.c_seq = chunk_seq; /* inherit chunk seq */
+	desc.f_seq = frame_seq;
+
+	auto ret = send_one_frame(nullptr, 0, sender, desc);
+	xzl_bug_on(ret != 0);
+}
+
 /* XXX: do something to the frame.
- * @sz: [out] the recv'd frame size, in bytes.
+ * @sz: [out] the recv'd frame size, in bytes. 0 if there is no actual frame
  * @fdesc: [out]
  *
  * return: frame seq extracted from the desc.
- * = -1 if this is the last frame (no actual data)
  * */
 unsigned recv_one_frame(zmq::socket_t & recv, size_t* sz, data_desc *fdesc) {
 
@@ -417,8 +498,7 @@ unsigned recv_one_frame(zmq::socket_t & recv, size_t* sz, data_desc *fdesc) {
 		boost::archive::text_iarchive ia(ss);
 
 		ia >> desc;
-		I("type %s cid %lu c_seq %d f_seq %d",
-			data_type_str[desc.type], desc.cid.as_uint, desc.c_seq, desc.f_seq);
+		I("%s", desc.to_string().c_str());
 	}
 
 	if (dmsg.more()) {	/* there's a frame for the desc. get it. */
@@ -441,7 +521,9 @@ unsigned recv_one_frame(zmq::socket_t & recv, size_t* sz, data_desc *fdesc) {
 	return desc.f_seq;
 }
 
-/* return a shared_ptr of the msg, which can be free'd later */
+/* return a shared_ptr of the frame, which can be free'd later.
+ * 	return nullptr if only desc but no frame is recv'd.
+ * */
 shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, data_desc *fdesc) {
 
 	I("start to rx msgs...");
@@ -466,7 +548,6 @@ shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, data_desc *fdesc
 	}
 
 	if (dmsg.more()) {	/* there's a frame for the desc. get it. */
-
 		cmsg = make_shared<zmq::message_t>();
 		xzl_bug_on(!cmsg);
 
@@ -475,11 +556,12 @@ shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, data_desc *fdesc
 		I("got chunk msg. size =%lu", cmsg->size());
 
 		xzl_bug_on_msg(cmsg->more(), "there should be no more");
+	} else {
+		xzl_bug_on(desc.type != TYPE_CHUNK_EOF && desc.type != TYPE_DECODED_FRAME_EOF && desc.type != TYPE_RAW_FRAME_EOF);
 	}
 
 	if (fdesc)
 		*fdesc = desc;
 
 	return cmsg;
-
 }

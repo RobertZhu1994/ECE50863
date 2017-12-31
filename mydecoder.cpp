@@ -176,7 +176,9 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 //static int video_stream = -1;
 //static AVCodecContext *decoder_ctx = NULL; /* okay to reuse across files? */
 
-/* decode one file and write frames to @sender */
+/* decode one file and write frames to @sender.
+ * will send the last desc of frame seq with no data.
+ * */
 int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 											 data_desc const &cdesc /* chunk info */) {
 
@@ -243,7 +245,6 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 		}
 	}
 
-
 	decoder_ctx = avcodec_alloc_context3(decoder);
 	xzl_bug_on_msg(!decoder_ctx, "no mem for avcodec ctx");
 //}
@@ -287,6 +288,7 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 	packet.size = 0;
 	ret = decode_write_hw(decoder_ctx, &packet, sender, cdesc);
 
+#if 0
 	{
 		/* send the final desc with no frame, marking the end of the chunk */
 		data_desc fdesc(TYPE_DECODED_FRAME);
@@ -298,6 +300,8 @@ int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
 		ret = send_one_frame(nullptr, 0, sender, fdesc);
 		xzl_bug_on(ret != 0);
 	}
+#endif
+	send_decoded_eof(cdesc.cid, cdesc.c_seq, decoder_ctx->frame_number + 1, sender);
 
 	k2_measure("decode/send end");
 

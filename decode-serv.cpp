@@ -148,8 +148,13 @@ int main(int ac, char * av[])
 			auto ret = mkstemp(fname);
 			xzl_bug_on(ret == -1);
 
-			recv_one_chunk_tofile(recver, &desc, fname);
-			decode_one_file_hw(fname, sender, desc);
+			if (recv_one_chunk_tofile(recver, &desc, fname) == 0)
+				decode_one_file_hw(fname, sender, desc);
+			else {
+				xzl_bug_on(desc.type != TYPE_CHUNK_EOF);
+				/* pass through this message to sink */
+				send_chunk_eof(desc.cid, desc.c_seq, sender);
+			}
 
 			ret = unlink(fname); /* clean up tmp file */
 			xzl_bug_on(ret != 0);

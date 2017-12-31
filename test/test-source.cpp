@@ -124,6 +124,8 @@ void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int typ
 	mdb_txn_commit(txn); /* done open the db */
 
 	data_desc temp_desc(type);
+	temp_desc.cid.stream_id = 1001;
+
 //	data_desc temp_desc(type);
 
 	unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
@@ -167,7 +169,7 @@ void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 	auto h = new my_alloc_hint(USE_MMAP_REFCNT, sz, buf, n_frames); /* will be free'd when refcnt drops to 0 */
 	for (auto i = 0u; i < n_frames; i++) {
 		data_desc fdesc(fdesc_temp);
-		fdesc.fid = i;
+		fdesc.f_seq= i;
 		send_one_frame_mmap(buf + i * frame_w, frame_w, s, fdesc, h);
 	}
 
@@ -177,7 +179,6 @@ void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 void test_send_raw_frames_from_file(const char *fname, zmq::socket_t &s_frame)
 {
 	data_desc fdesc(TYPE_RAW_FRAME);
-	fdesc.height = 320; fdesc.width = 240; fdesc.yuv_mode = 420;
 	send_raw_frames_from_file(fname, s_frame, 320, 240, 420, fdesc);
 }
 
@@ -247,8 +248,8 @@ int main (int argc, char *argv[])
 
 //	test_send_raw_frames_from_file(argv[1], s_frame);
 
-//	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
-	test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
+	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
+//	test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
 
 //	rc = pthread_join(si_server, nullptr); /* will never join.... XXX */
 //	xzl_bug_on(rc != 0);

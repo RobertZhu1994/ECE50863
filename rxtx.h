@@ -5,6 +5,8 @@
 #ifndef VIDEO_STREAMER_RXTX_H
 #define VIDEO_STREAMER_RXTX_H
 
+#include <memory>
+
 #include <zmq.hpp>
 #include "msgfmt.h"
 #include "mm.h"
@@ -25,7 +27,13 @@ int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
 int send_one_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 													 vs::data_desc const & cdesc, my_alloc_hint * hint);
 
-int recv_one_frame(zmq::socket_t & recv, size_t* sz = nullptr);
+unsigned recv_one_frame(zmq::socket_t & recv, size_t* sz = nullptr, vs::data_desc *fdesc = nullptr);
+
+std::shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, vs::data_desc *fdesc);
+
+void send_chunk_eof(vs::cid_t const & cid, unsigned int chunk_seq, zmq::socket_t & sender);
+void send_raw_eof(vs::cid_t const & cid, unsigned int frame_seq, zmq::socket_t & sender);
+void send_decoded_eof(vs::cid_t const & cid, unsigned int chunk_seq, unsigned int frame_seq, zmq::socket_t & sender);
 
 //int send_all_stream_info(zmq::socket_t & sender);
 

@@ -32,7 +32,7 @@ int main(int ac, char * av[])
 		data_desc desc(TYPE_RAW_FRAME);
 
 		/* send some fb back */
-		feedback fb(desc.fid, fb_cnt++);
+		feedback fb(desc.cid, fb_cnt++);
 		send_one_fb(fb, fb_sender);
 //		feedback fb1(desc.id, fb_cnt++);
 //		send_one_fb(fb1, fb_sender);

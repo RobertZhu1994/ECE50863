@@ -52,11 +52,24 @@ int main (int argc, char *argv[])
 
 	stat_collector.start(200 /*ms, check interval */, &getStatistics);
 
-	size_t sz;
+	size_t sz = 1;
 	while (1) {
-		recv_one_frame(receiver, &sz);
-		stat.inc_byte_counter((int)sz);
-		stat.inc_rec_counter(1);
+#if 0
+		unsigned seq = recv_one_frame(receiver, &sz);
+		if (sz == 0) {
+			EE("got end frame. final seq = %u", seq);
+		}
+#endif
+
+		data_desc desc;
+		auto msg_ptr = recv_one_frame(receiver, &desc);
+		if (!msg_ptr) {
+			EE("got desc: %s", desc.to_string().c_str());
+		} else {
+//			EE("sz %lu", sz);
+			stat.inc_byte_counter((int) msg_ptr->size());
+			stat.inc_rec_counter(1);
+		}
 	}
 
 	/* XXX stop the stat collector */

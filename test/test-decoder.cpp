@@ -79,9 +79,6 @@ int main(int ac, char * av[])
 	data_desc desc;
 	decode_one_file_hw(fname_in, s, desc);
 
-	data_desc fdesc(TYPE_RAW_FRAME); desc.fid = -1; /* no more frames */
-	send_one_frame(nullptr, 0, s, fdesc);
-
 	rc = pthread_join(sink, nullptr);
 
 	xzl_bug_on(rc != 0);

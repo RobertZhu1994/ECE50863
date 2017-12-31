@@ -20,6 +20,8 @@
 
 #include <zmq.hpp>
 
+#include "mm.h"
+
 namespace vs {
 
 //	using cid_t = uint64_t; /* chunk id type */
@@ -84,6 +86,11 @@ namespace vs {
 		TYPE_CHUNK = 0,
 		TYPE_RAW_FRAME, 		/* raw frames loaded from db */
 		TYPE_DECODED_FRAME, /* decoded on the fly */
+
+		TYPE_CHUNK_EOF,			/* end of the specified time range */
+		TYPE_RAW_FRAME_EOF, /* end of the specified time range */
+		TYPE_DECODED_FRAME_EOF, /* end of the current chunk */
+
 		TYPE_INVALID
 	};
 
@@ -156,6 +163,12 @@ namespace vs {
 
 		data_desc() : type (TYPE_INVALID) {};
 
+		/* for dbg */
+		std::string to_string() {
+			return string_format("type %s cid (stream_id %u ts %lu) c_seq %d f_seq %d",
+													 data_type_str[type], cid.stream_id, cid.ts, c_seq, f_seq);
+		}
+
 	};
 #endif
 
@@ -224,7 +237,7 @@ std::shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t &s,
 void recv_one_chunk_to_buf(zmq::socket_t & s, vs::data_desc *desc,
 													 char **p, size_t *sz);
 
-void recv_one_chunk_tofile(zmq::socket_t & s, vs::data_desc *desc,
-													 const char * fname);
+int recv_one_chunk_tofile(zmq::socket_t &s, vs::data_desc *desc,
+													const char *fname);
 
 #endif //VIDEO_STREAMER_MSGFMT_H

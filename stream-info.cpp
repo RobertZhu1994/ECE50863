@@ -9,12 +9,19 @@
 
 using namespace vs;
 
-std::array<const char *, TYPE_INVALID + 1> data_type_str {
-		"chunk",
-		"raw_frame",
-		"decoded_frame",
-		"invalid"
-};
+namespace vs {
+	std::array<const char *, TYPE_INVALID + 1> data_type_str{
+			"chunk",
+			"raw_frame",
+			"decoded_frame",
+
+			"chunk_eof",
+			"raw_frame_eof",
+			"decoded_frame_eof",
+
+			"invalid"
+	};
+}
 
 static stream_desc const all_streams_[] = {
 		{
