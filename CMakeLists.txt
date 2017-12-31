@@ -65,6 +65,7 @@ file (GLOB LIB_SOURCES
         #        mydecoder_sw.cpp       # obsoleted
         rxtx.cpp
         lmdb-if.cpp
+        stream-info.cpp
         )
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -174,7 +175,7 @@ TARGET_LINK_LIBRARIES(taskwork2.bin
         zmq
         )
 ########################################
-SET(PROGRAM test-frame-puller)
+SET(PROGRAM test-sink)
 add_executable(${PROGRAM}.bin
         test/${PROGRAM}.cpp
         )
@@ -189,9 +190,9 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
         COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
-SET(BINARY test-chunk-pusher.bin)
+SET(BINARY test-source.bin)
 add_executable(${BINARY}
-        test/test-chunk-pusher.cpp
+        test/test-source.cpp
         )
 TARGET_LINK_LIBRARIES(${BINARY}
         vstreamer
@@ -279,7 +280,7 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
         COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
-SET(PROGRAM test-lmdb-build)
+SET(PROGRAM test-db-build)
 add_executable(${PROGRAM}.bin
         test/${PROGRAM}.cpp
         )

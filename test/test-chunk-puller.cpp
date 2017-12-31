@@ -36,7 +36,7 @@ void recv_one_file(const char *fname /* to save */) {
 		boost::archive::text_iarchive ia(ss);
 
 		ia >> desc;
-		I("key %lu length_ms %lu", desc.cid, desc.length_ms);
+		I("key %lu length_ms %d", desc.cid.as_uint, desc.length_ms);
 	}
 
 	{

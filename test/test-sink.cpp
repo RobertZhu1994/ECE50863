@@ -31,6 +31,12 @@ static void getStatistics(void) {
 	printf("%.2f MB/sec \t %.0f fps \n", s.byte_persec/1024/1024, s.rec_persec);
 };
 
+/* pull the source to get info for all streams */
+void getAllStreamInfo() {
+
+
+
+}
 
 int main (int argc, char *argv[])
 {

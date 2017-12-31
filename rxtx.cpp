@@ -48,7 +48,7 @@ shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
 		boost::archive::text_iarchive ia(ss);
 
 		ia >> *desc;
-		I("key %lu length_ms %d", desc->cid, desc->length_ms);
+		I("key %lu length_ms %d", desc->cid.as_uint, desc->length_ms);
 	}
 
 	{
@@ -201,7 +201,7 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 
 		cid_t id = *(cid_t *)key.mv_data;
 
-		if (id >= end)
+		if (id.as_uint >= end.as_uint)
 			break;
 
 		I("loaded one k/v. key: %lu, sz %zu data sz %zu",
@@ -296,6 +296,31 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 	return 0;
 }
 
+/* return: # of stream info sent */
+extern stream_desc all_streams[]; /* in stream-info.cpp */
+int send_all_stream_info(zmq::socket_t & sender)
+{
+	int cnt;
+	stream_desc * sd = all_streams;
+
+	for (cnt = 0; sd[cnt].stream_id == -1; cnt++) {
+		ostringstream oss;
+		boost::archive::text_oarchive oa(oss);
+
+		oa << *sd;
+		string s = oss.str();
+
+		zmq::message_t dmsg(s.begin(), s.end());
+		if (sd[cnt+1].stream_id == -1) /* this is the last one */
+			sender.send(dmsg, 0); /* multipart msg */
+		else
+			sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
+
+		VV("one stream info sent");
+	}
+	return cnt;
+}
+
 /* send a raw frame from a mmap'd buffer.
  * @hint: the info about the mmap'd buffer (inc refcnt) for zmq to perform unmapping
  *
@@ -382,7 +407,7 @@ int recv_one_frame(zmq::socket_t & recv, size_t* sz) {
 		boost::archive::text_iarchive ia(ss);
 
 		ia >> desc;
-		I("cid %lu fid %d", desc.cid, desc.fid);
+		I("cid %lu fid %d", desc.cid.as_uint, desc.fid);
 	}
 
 	if (desc.fid != -1) {	/* recv the frame */

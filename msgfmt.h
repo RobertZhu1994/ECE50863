@@ -18,9 +18,32 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
 
+#include <zmq.hpp>
+
 namespace vs {
 
-	using cid_t = uint64_t; /* chunk id type */
+//	using cid_t = uint64_t; /* chunk id type */
+
+	/* can use bit field to adjust field width. e.g.
+	 * unsigned int stream_id :
+	 *
+	 * NB: the byte order also affects how lmdb compares keys
+	 */
+
+	using ts_t = uint32_t; /* in ms */
+
+	struct cid_t {
+		union {
+			struct {
+				uint32_t stream_id; /* global */
+				ts_t ts;
+			};
+			uint64_t as_uint;
+		};
+
+		cid_t (uint64_t const & x) : as_uint(x) { }
+		cid_t () { }
+	};
 
 #if 0
 	struct data_desc {
@@ -72,6 +95,7 @@ namespace vs {
 		int yuv_mode; /* 420/422/444 */
 
 		/* for TYPE_CHUNK */
+		int fps; /* used to derive fid */
 		int length_ms;
 
 	private:
@@ -80,7 +104,7 @@ namespace vs {
 		template<class Archive>
 		void serialize(Archive &ar, const unsigned int version) {
 			ar & type;
-			ar & cid;
+			ar & cid.as_uint;
 
 			ar & fid;
 			ar & width;
@@ -96,11 +120,40 @@ namespace vs {
 
 		data_desc() : type (TYPE_INVALID) {};
 
-//		data_desc(uint64_t cid, int fid) :
-//				cid(cid), fid(fid) {};
-
 	};
 #endif
+
+	/* desc for a substream */
+	struct stream_desc {
+		int stream_id;	/* global id for this stream. -1 means invalid */
+
+		std::string db_path; /* in fs */
+
+		bool is_encoded;
+
+		int width, height;
+		int fps;
+
+		/* for raw video */
+		int yuv_mode; /* 420/422/444. */
+
+		ts_t start, duration;
+
+		template<class Archive>
+		void serialize(Archive &ar, const unsigned int version) {
+			ar & stream_id;
+			ar & db_path;		// don't need to send this over?
+
+			ar & width;
+			ar & height;
+			ar & fps;
+
+			ar & yuv_mode;
+
+			ar & start;
+			ar & duration;
+		}
+	};
 
 /* work progress feedback from downstream */
 	enum fb_type {
@@ -122,10 +175,11 @@ namespace vs {
 
 		template<class Archive>
 		void serialize(Archive &ar, const unsigned int version) {
-			ar & cid;
+			ar & cid.as_uint;
 			ar & fid;
 		}
 	};
+
 } // namespace vs
 
 std::shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t &s,

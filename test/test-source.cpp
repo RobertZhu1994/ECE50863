@@ -15,6 +15,7 @@
 
 #include <sstream> // std::ostringstream
 
+#include <zmq.h>
 #include <zmq.hpp>
 
 #include "mm.h"
@@ -64,7 +65,7 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 
 	/* send desc */
 	struct data_desc desc(TYPE_CHUNK);
-	desc.cid = 100; /* XXX more */
+	desc.cid.as_uint = 100; /* XXX more */
 
 	ostringstream oss;
 	boost::archive::text_oarchive oa(oss);
@@ -176,10 +177,29 @@ void test_send_raw_frames_from_file(const char *fname, zmq::socket_t &s_frame)
 	send_raw_frames_from_file(fname, s_frame, 320, 240, 420, fdesc);
 }
 
+static zmq::context_t context (1 /* # io threads */);
+
+static void *serv_stream_info(void *t) {
+
+	zmq::socket_t si_sender(context, ZMQ_REP);
+	si_sender.setsockopt(ZMQ_SNDHWM, 1);
+	si_sender.bind(STREAMINFO_PUSH_ADDR);
+
+	EE("launched.");
+
+	while (1) {
+		zmq::message_t req;
+		si_sender.recv(&req);
+
+		send_all_stream_info(si_sender);
+	}
+
+	return nullptr;
+}
+
 /* argv[1] -- the video file name */
 int main (int argc, char *argv[])
 {
-	zmq::context_t context (1 /* # io threads */);
 
 	zmq::socket_t sender(context, ZMQ_PUSH);
 //	sender.connect(CLIENT_PUSH_TO_ADDR);
@@ -193,6 +213,10 @@ int main (int argc, char *argv[])
 
 	I("bound to %s (fb %s). wait for workers to pull ...",
 		CHUNK_PUSH_ADDR, FB_PULL_ADDR);
+
+	pthread_t si_server;
+	int rc = pthread_create(&si_server, NULL, serv_stream_info, NULL);
+	xzl_bug_on(rc != 0);
 
 	printf ("Press Enter when the workers are ready: ");
 	getchar ();
@@ -219,6 +243,10 @@ int main (int argc, char *argv[])
 
 //	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
 	test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
+
+
+	rc = pthread_join(si_server, nullptr); /* will never join.... XXX */
+	xzl_bug_on(rc != 0);
 
 	return 0;
 }

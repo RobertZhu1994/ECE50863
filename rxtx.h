@@ -27,4 +27,6 @@ int send_one_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 
 int recv_one_frame(zmq::socket_t & recv, size_t* sz = nullptr);
 
+int send_all_stream_info(zmq::socket_t & sender);
+
 #endif //VIDEO_STREAMER_RXTX_H

@@ -57,6 +57,8 @@ char input_dir[] = "/shared/videos/seg/";
 
 /* return a vector of full path string */
 #include <dirent.h>
+#include <msgfmt.h>
+
 vector<string> get_all_files_dir(char * dirpath)
 {
 	vector<string> ret;
@@ -159,6 +161,7 @@ char input_raw_video[] = "/shared/videos/raw-320x240-yuv420p.yuv";
 static int height = 320;
 static int width = 240;
 static int yuv_mode = 420;
+static int fps = 10;
 
 /* @fname: the raw video file.
  * each k/v is a frame; v is often hundred KB */
@@ -194,6 +197,7 @@ void build_raw_frame_db(const char *fname)
 	MDB_val key, data;
 	MDB_txn *txn;
 	MDB_stat mst;
+	MDB_cursor *cursor;
 
 	rc = mdb_env_create(&env);
 	xzl_bug_on(rc != 0);
@@ -215,12 +219,24 @@ void build_raw_frame_db(const char *fname)
 	rc = mdb_dbi_open(txn, NULL, MDB_INTEGERKEY | MDB_CREATE, &dbi);
 	xzl_bug_on(rc != 0);
 
+	/* get the last key */
+	vs::cid_t  last_key;
+	rc = mdb_cursor_open(txn, dbi, &cursor);
+	xzl_bug_on(rc != 0);
+	rc = mdb_cursor_get(cursor, &key, &data, MDB_LAST);
+	if (rc == MDB_NOTFOUND)
+		last_key = 0;
+	else {
+		xzl_bug_on(rc != 0);
+		last_key = *(vs::cid_t *) key.mv_data;
+	}
+
 	for (auto i = 0u; i < n_frames; i++) {
+		last_key.as_uint += (60 / fps);
+//		uint64_t realkey = rand() % INT_MAX;
 
-		uint64_t realkey = rand() % INT_MAX;
-
-		key.mv_data = &realkey;
-		key.mv_size = sizeof(realkey);
+		key.mv_data = &last_key;
+		key.mv_size = sizeof(last_key);
 
 		data.mv_data = buf + i * frame_w;
 		data.mv_size = frame_w;
