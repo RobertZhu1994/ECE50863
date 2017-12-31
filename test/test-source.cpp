@@ -179,6 +179,7 @@ void test_send_raw_frames_from_file(const char *fname, zmq::socket_t &s_frame)
 
 static zmq::context_t context (1 /* # io threads */);
 
+#if 0 /* tbd */
 static void *serv_stream_info(void *t) {
 
 	zmq::socket_t si_sender(context, ZMQ_REP);
@@ -196,6 +197,7 @@ static void *serv_stream_info(void *t) {
 
 	return nullptr;
 }
+#endif
 
 /* argv[1] -- the video file name */
 int main (int argc, char *argv[])
@@ -214,9 +216,9 @@ int main (int argc, char *argv[])
 	I("bound to %s (fb %s). wait for workers to pull ...",
 		CHUNK_PUSH_ADDR, FB_PULL_ADDR);
 
-	pthread_t si_server;
-	int rc = pthread_create(&si_server, NULL, serv_stream_info, NULL);
-	xzl_bug_on(rc != 0);
+//	pthread_t si_server;
+//	int rc = pthread_create(&si_server, NULL, serv_stream_info, NULL);
+//	xzl_bug_on(rc != 0);
 
 	printf ("Press Enter when the workers are ready: ");
 	getchar ();
@@ -244,9 +246,8 @@ int main (int argc, char *argv[])
 //	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
 	test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
 
-
-	rc = pthread_join(si_server, nullptr); /* will never join.... XXX */
-	xzl_bug_on(rc != 0);
+//	rc = pthread_join(si_server, nullptr); /* will never join.... XXX */
+//	xzl_bug_on(rc != 0);
 
 	return 0;
 }
