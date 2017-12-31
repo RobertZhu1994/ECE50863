@@ -5,6 +5,8 @@
 
  g++ serialization.cpp -o serialization.bin -I../ -lboost_serialization -std=c++11
 
+
+ cf http://www.boost.org/doc/libs/1_62_0/libs/serialization/doc/serialization.html
  */
 
 #include <sstream> // std::ostringstream

@@ -155,7 +155,7 @@ int main(int ac, char * av[])
 			xzl_bug_on(ret != 0);
 
 			/* send some fb back */
-			feedback fb(desc.id, fb_cnt++);
+			feedback fb(desc.cid, fb_cnt++);
 			send_one_fb(fb, fb_sender);
 
 			I("sent one fb");

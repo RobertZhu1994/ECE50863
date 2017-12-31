@@ -94,7 +94,7 @@ SET (FFMPEG_LIBS
         swscale
         avutil
         #				X11 va-x11 va-drm  va # intel's video accel lib etc
-#                vdpau  # nvidia decoding & presentation
+                vdpau  # nvidia decoding & presentation
         )
 
 SET (COMMON_LIBS
@@ -149,15 +149,7 @@ add_executable(demuxing_decoding.bin
         )
 TARGET_LINK_LIBRARIES(demuxing_decoding.bin
         ${FFMPEG_LIBS}
-        m
-        xcb
-        xcb-shm
-        xcb-shape
-        dl
-        bz2
-        z
-        pthread
-        lzma
+        ${COMMON_LIBS}
         )
 ########################################
 add_executable(decode_video.bin
@@ -165,15 +157,7 @@ add_executable(decode_video.bin
         )
 TARGET_LINK_LIBRARIES(decode_video.bin
         ${FFMPEG_LIBS}
-        m
-        xcb
-        xcb-shm
-        xcb-shape
-        dl
-        bz2
-        z
-        pthread
-        lzma
+        ${COMMON_LIBS}
         )
 ########################################
 add_executable(taskvent.bin

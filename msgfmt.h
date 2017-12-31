@@ -53,8 +53,9 @@ namespace vs {
 
 #if 1
 	enum data_type {
-		DT_CHUNK = 0,
-		DT_RAW_FRAME = 1
+		TYPE_CHUNK = 0,
+		TYPE_RAW_FRAME,
+		TYPE_INVALID
 	};
 
 	struct data_desc {
@@ -65,12 +66,12 @@ namespace vs {
 		int type;  /* enum data_type */
 		cid_t cid;  /* chunk id */
 
-		/* for DT_RAW_FRAME */
+		/* for TYPE_RAW_FRAME */
 		int fid;    /* frame id. -1 means invalid, there's no more frame */
 		int width, height;
 		int yuv_mode; /* 420/422/444 */
 
-		/* for DT_CHUNK */
+		/* for TYPE_CHUNK */
 		int length_ms;
 
 	private:
@@ -93,7 +94,7 @@ namespace vs {
 		/* must specify type */
 		data_desc(int type) : type (type) {};
 
-		data_desc() = delete;
+		data_desc() : type (TYPE_INVALID) {};
 
 //		data_desc(uint64_t cid, int fid) :
 //				cid(cid), fid(fid) {};
@@ -110,14 +111,14 @@ namespace vs {
 	struct feedback {
 		enum fb_type type;
 
-		uint64_t cid;
+		cid_t cid;
 		int fid;
 
 		/* todo: more */
 
 		feedback() {};
 
-		feedback(uint64_t cid, int fid) : cid(cid), fid(fid) {};
+		feedback(cid_t cid, int fid) : cid(cid), fid(fid) {};
 
 		template<class Archive>
 		void serialize(Archive &ar, const unsigned int version) {

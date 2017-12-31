@@ -22,6 +22,7 @@
 #include "msgfmt.h"
 #include "mydecoder.h"
 #include "log.h"
+#include "measure.h"
 #include "rxtx.h"
 
 using namespace std;
@@ -62,7 +63,9 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 {
 
 	/* send desc */
-	struct data_desc desc(100, 1000, 1000);
+	struct data_desc desc(TYPE_CHUNK);
+	desc.cid = 100; /* XXX more */
+
 	ostringstream oss;
 	boost::archive::text_oarchive oa(oss);
 
@@ -91,7 +94,7 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 
 /* given key range, load all the chunks from the db, and send them out as
  * msgs (desc + chunk for each) */
-void test_send_chunks_from_db(const char *dbpath, zmq::socket_t & sender)
+void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int type)
 {
 	int rc;
 	MDB_env *env;
@@ -115,10 +118,15 @@ void test_send_chunks_from_db(const char *dbpath, zmq::socket_t & sender)
 
 	mdb_txn_commit(txn); /* done open the db */
 
-	send_chunks_from_db(env, dbi, 0, 1000 * 1000 * 1000, sender);
+	data_desc temp_desc(type);
+//	data_desc temp_desc(type);
+
+	unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
 
 	/* -- wait for all outstanding? -- */
 	sleep (10);
+
+	EE("total %u loaded & sent", cnt);
 
 	mdb_dbi_close(env, dbi);
 	mdb_env_close(env);
@@ -128,7 +136,7 @@ void test_send_chunks_from_db(const char *dbpath, zmq::socket_t & sender)
 /* send raw frames (from a raw video file) over. */
 void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 													 int height, int width, int yuv_mode,
-													 data_desc const & cdesc)
+													 data_desc const & fdesc_temp)
 {
 	size_t frame_sz = (size_t) width * (size_t) height;
 	size_t frame_w;
@@ -153,7 +161,8 @@ void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 	/* all frames come from the same mmap'd file. they share the same @hint */
 	auto h = new my_alloc_hint(USE_MMAP_REFCNT, sz, buf, n_frames); /* will be free'd when refcnt drops to 0 */
 	for (auto i = 0u; i < n_frames; i++) {
-		data_desc fdesc(cdesc.id, i /* frame id */);  /* XXX improve this */
+		data_desc fdesc(fdesc_temp);
+		fdesc.fid = i;
 		send_one_frame_mmap(buf + i * frame_w, frame_w, s, fdesc, h);
 	}
 
@@ -162,8 +171,9 @@ void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
 
 void test_send_raw_frames_from_file(const char *fname, zmq::socket_t &s_frame)
 {
-	data_desc cdesc(0, 1000, 100); /* random numbers */
-	send_raw_frames_from_file(fname, s_frame, 320, 240, 420, cdesc);
+	data_desc fdesc(TYPE_RAW_FRAME);
+	fdesc.height = 320; fdesc.width = 240; fdesc.yuv_mode = 420;
+	send_raw_frames_from_file(fname, s_frame, 320, 240, 420, fdesc);
 }
 
 /* argv[1] -- the video file name */
@@ -207,7 +217,8 @@ int main (int argc, char *argv[])
 
 //	test_send_raw_frames_from_file(argv[1], s_frame);
 
-	test_send_chunks_from_db(DB_PATH, sender);
+//	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
+	test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
 
 	return 0;
 }

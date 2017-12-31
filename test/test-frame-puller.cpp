@@ -44,7 +44,7 @@ int main (int argc, char *argv[])
 
 	CallBackTimer stat_collector;
 
-	stat_collector.start(1000 /*ms, check interval */, &getStatistics);
+	stat_collector.start(200 /*ms, check interval */, &getStatistics);
 
 	size_t sz;
 	while (1) {

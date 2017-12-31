@@ -24,10 +24,9 @@
 
 #include <lmdb.h>
 
+#include "config.h"
 #include "log.h"
 #include "mm.h"
-
-#define LMDB_PATH "/shared/videos/lmdb/"
 
 using namespace std;
 
@@ -106,7 +105,7 @@ void build_chunk_db(void)
 	rc = mdb_env_set_mapsize(env, 1UL * 1024UL * 1024UL * 1024UL); /* 1 GiB */
 	xzl_bug_on(rc != 0);
 
-	rc = mdb_env_open(env, LMDB_PATH, 0, 0664);
+	rc = mdb_env_open(env, DB_PATH, 0, 0664);
 	xzl_bug_on(rc != 0);
 
 	rc = mdb_txn_begin(env, NULL, 0, &txn);
@@ -205,7 +204,7 @@ void build_raw_frame_db(const char *fname)
 	rc = mdb_env_set_maxdbs(env, 1); /* required for named db */
 	xzl_bug_on(rc != 0);
 
-	rc = mdb_env_open(env, LMDB_RAWFRAME_PATH, 0, 0664);
+	rc = mdb_env_open(env, DB_RAW_FRAME_PATH, 0, 0664);
 	xzl_bug_on(rc != 0);
 
 	rc = mdb_txn_begin(env, NULL, 0, &txn);
@@ -234,7 +233,7 @@ void build_raw_frame_db(const char *fname)
 	rc = mdb_txn_commit(txn);
 	rc = mdb_env_stat(env, &mst);
 
-	I("lmdb stat: ms_depth %u ms_entries %zu", mst.ms_depth, mst.ms_entries);
+	EE("lmdb stat: ms_depth %u ms_entries %zu", mst.ms_depth, mst.ms_entries);
 
 	/* clean up */
 

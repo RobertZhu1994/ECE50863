@@ -148,7 +148,9 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 		}
 
 		{
-			data_desc fdesc(cdesc.id, avctx->frame_number); /* XXX: gen fdesc */
+			data_desc fdesc(TYPE_RAW_FRAME);
+			fdesc.cid = cdesc.cid;
+			fdesc.fid = avctx->frame_number; /* XXX: gen fdesc */
 			if ((ret = send_one_frame(buffer, size, sender, fdesc)) <
 					0) { /* will free buffer */
 				fprintf(stderr, "Failed to dump raw data.\n");

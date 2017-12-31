@@ -21,6 +21,9 @@
 #define CHUNK_PUSH_ADDR "tcp://*:5558"
 #define FB_PULL_ADDR "tcp://*:5559"
 
-#define DB_PATH "/shared/videos/lmdb/"
+#define DB_PATH 							"/shared/videos/lmdb/"
+#define DB_RAW_FRAME_PATH 		"/shared/videos/lmdb-rf/"
+//#define DB_RAW_FRAME_PATH 		"/shared/videos/lmdb-rf-ssd/"
+
 
 #endif //VIDEO_STREAMER_CONFIG_H

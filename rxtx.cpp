@@ -48,7 +48,7 @@ shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
 		boost::archive::text_iarchive ia(ss);
 
 		ia >> *desc;
-		I("key %lu length_ms %lu", desc->id, desc->length_ms);
+		I("key %lu length_ms %d", desc->cid, desc->length_ms);
 	}
 
 	{
@@ -157,17 +157,20 @@ bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
 	return ret;
 }
 
-/* caller must ensure: no tx is for the db is alive as of now
+/* send multiple chunks/frames from the db.
+ *
+ * caller must ensure: no tx is for the db is alive as of now
  *
  * @dbi: must be opened already.
  *
  * @start/end: inclusive/exclusive
+ * @desc: template desc. its .type indicate whether this is for raw frames or for chunks
  *
  * @return: total chunks sent.
  * */
-unsigned send_chunks_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
+unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 														 zmq::socket_t &s,
-														 data_desc const &temp_desc /* template */)
+														 data_desc const &temp_desc /* template. */)
 {
 	MDB_txn *txn;
 	MDB_val key, data;
@@ -205,12 +208,20 @@ unsigned send_chunks_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 			*(uint64_t *)key.mv_data, key.mv_size,
 			data.mv_size);
 
-		data_desc desc;
-		desc.id = id;
-		desc.size = key.mv_size;
-		/* XXX more */
+		data_desc desc(temp_desc); /* copy ctor */
+		switch (desc.type) {
+			case TYPE_RAW_FRAME:
+				desc.cid = id;
+				break;
+			case TYPE_CHUNK:
+				/* XXX */
+				break;
+			default:
+				xzl_bug("???");
+		}
 
-		send_one_chunk_from_db((uint8_t *)data.mv_data, data.mv_size, s, desc, hint);
+		/* XXX more. check desc.type and fill in the rest of the desc... */
+		send_one_from_db((uint8_t *)data.mv_data, data.mv_size, s, desc, hint);
 		cnt ++;
 	}
 
@@ -318,16 +329,19 @@ int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
 	return 0;
 }
 
-/* send one buf (chunk) returned from a live lmdb transaction */
-int send_one_chunk_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
-												data_desc const & cdesc, my_alloc_hint * hint) {
+/* send one buf (chunk or frame) returned from a live lmdb transaction.  *
+ *
+ * @desc: already filled in.
+ */
+int send_one_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
+												data_desc const & desc, my_alloc_hint * hint) {
 	xzl_bug_on(!buffer || !hint);
 
 	/* send frame desc */
 	ostringstream oss;
 	boost::archive::text_oarchive oa(oss);
 
-	oa << cdesc;
+	oa << desc;
 	string s = oss.str();
 
 	zmq::message_t dmsg(s.begin(), s.end());
@@ -355,7 +369,7 @@ int recv_one_frame(zmq::socket_t & recv, size_t* sz) {
 
 	I("start to rx msgs...");
 
-	data_desc desc;
+	data_desc desc(TYPE_RAW_FRAME);
 
 	{
 		/* recv the desc */
