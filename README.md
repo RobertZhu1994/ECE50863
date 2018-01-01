@@ -1,3 +1,7 @@
+# to build
+using CMakefile. Check out the script
+env-xzl.sh
+And modify path as needed.
 
 # 3rd party lib
 db - lmdb
@@ -27,7 +31,7 @@ a sequence of chunks/frames to be consumed by CV
 - have the same quality
 - no overlap on vtime axis
 - there might be holes on vtime (deleted?)
-  
+
 # CODE
 
 ## data structure defs:
