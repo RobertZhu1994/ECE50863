@@ -1,0 +1,8 @@
+//
+// Created by xzl on 1/1/18.
+//
+
+#ifndef VIDEO_STREAMER_RX_MANAGER_H
+#define VIDEO_STREAMER_RX_MANAGER_H
+
+#endif //VIDEO_STREAMER_RX_MANAGER_H

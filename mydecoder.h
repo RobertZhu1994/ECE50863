@@ -8,7 +8,7 @@
 #include <zmq.hpp>
 #include <lmdb.h>
 
-#include "msgfmt.h"
+#include "vs-types.h"
 #include "mm.h"
 
 extern "C" {

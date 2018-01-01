@@ -4,7 +4,7 @@
 // obsoleted. can't decode h264 properly. see mydecoder_hw.cpp
 
 #include "mydecoder.h"
-#include "msgfmt.h"
+#include "vs-types.h"
 #include "log.h"
 
 using namespace vstreamer;

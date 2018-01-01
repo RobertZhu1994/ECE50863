@@ -5,7 +5,7 @@
 #include <array>
 
 #include "config.h"
-#include "msgfmt.h"
+#include "vs-types.h"
 
 using namespace vs;
 

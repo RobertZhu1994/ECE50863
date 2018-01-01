@@ -32,7 +32,8 @@ namespace vs {
 	 * NB: the byte order also affects how lmdb compares keys
 	 */
 
-	using ts_t = uint32_t; /* in ms */
+	using ts_t = uint32_t; /* type for video time, in ms */
+	using seq_t = unsigned int; /* type for chunk/frame sequence number in a stream */
 
 	/* globally unique. persistent. */
 	struct cid_t {
@@ -94,6 +95,16 @@ namespace vs {
 		TYPE_INVALID
 	};
 
+#define is_type_eof(x) \
+	(x == TYPE_CHUNK_EOF \
+|| x == TYPE_RAW_FRAME_EOF \
+|| x == TYPE_DECODED_FRAME_EOF)
+
+#define is_type_data(x) \
+		(x == TYPE_CHUNK \
+|| x == TYPE_RAW_FRAME \
+|| x == TYPE_DECODED_FRAME)
+
 	/* defined in stream-info */
 	extern std::array<const char *, TYPE_INVALID + 1> data_type_str;
 
@@ -124,8 +135,8 @@ namespace vs {
 		 *
 		 * if source emits encoded chunks, it does not know # frames per chunk
 		 * until decoding. */
-		unsigned int c_seq; /* chunk seq */
-		unsigned int f_seq; /* frame seq */
+		seq_t c_seq; /* chunk seq */
+		seq_t f_seq; /* frame seq */
 
 #if 0
 		/* for TYPE_RAW_FRAME */
@@ -231,13 +242,8 @@ namespace vs {
 
 } // namespace vs
 
-std::shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t &s,
-																							 vs::data_desc *desc);
-
-void recv_one_chunk_to_buf(zmq::socket_t & s, vs::data_desc *desc,
-													 char **p, size_t *sz);
-
-int recv_one_chunk_tofile(zmq::socket_t &s, vs::data_desc *desc,
-													const char *fname);
+/* return values */
+#define VS_ERR_EOF_CHUNKS		1
+#define VS_ERR_AGAIN				2
 
 #endif //VIDEO_STREAMER_MSGFMT_H

@@ -11,7 +11,7 @@ extern "C" {
 #include "measure.h"
 }
 #include "config.h"
-#include "msgfmt.h"
+#include "vs-types.h"
 #include "log.h"
 #include "mm.h"
 #include "rxtx.h"
@@ -27,127 +27,6 @@ static void my_free_av (void *data, void *hint)
 	av_freep(&data);
 }
 #endif
-
-/* recv a desc msg and a chunk msg.
- *
- * for the chunk msg,
- * return a shared ptr of msg, so that we can access its data() later
- * [ there seems no safe way of moving out its data. ]
- *
- * if the desc indicates eof of a chunk seq, there will be no chunk data.
- * in that case, @desc will be filled but nullptr will be returned.
- *
- */
-shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
-//	zmq::context_t context(1 /* # io threads */);
-
-	{
-		/* recv the desc */
-		zmq::message_t dmsg;
-		s.recv(&dmsg);
-		I("got desc msg. msg size =%lu", dmsg.size());
-
-		std::string s((char const *)dmsg.data(), dmsg.size()); /* copy over */
-		std::istringstream ss(s);
-		boost::archive::text_iarchive ia(ss);
-
-		ia >> *desc;
-		I("%s", desc->to_string().c_str());
-
-		if (desc->type == TYPE_CHUNK_EOF) {
-			xzl_bug_on(dmsg.more());
-			return nullptr;
-		} else {
-			xzl_bug_on(desc->type != TYPE_CHUNK); /* can't be anything else */
-			xzl_bug_on(!dmsg.more()); /* there must be data */
-		}
-	}
-
-	{
-		/* recv the chunk */
-		auto cmsg = make_shared<zmq::message_t>();
-		xzl_bug_on(!cmsg);
-		auto ret = s.recv(cmsg.get());
-		xzl_bug_on(!ret); /* EAGAIN? */
-		I("got chunk msg. size =%lu", cmsg->size());
-
-		xzl_bug_on_msg(cmsg->more(), "multipart msg should end");
-
-		return cmsg;
-	}
-}
-
-/* recv a desc and a chunk from socket.
- *
- * this does memcpy since we assume encoded chunks won't be too large.
- * However, @recv_one_chunk() enables zero-copy if that's desirable.
- *
- * @p: [OUT] mem buffer from malloc(). to be free'd by the caller
- */
-void recv_one_chunk_to_buf(zmq::socket_t &s, data_desc *desc,
-													 char **p, size_t *sz) {
-
-	auto cmsg = recv_one_chunk(s, desc);
-
-	k2_measure("chunk recv'd");
-
-	if (cmsg) {
-		char *buf = (char *) malloc(cmsg->size());
-		xzl_bug_on(!buf);
-
-		memcpy(buf, cmsg->data(), cmsg->size());
-
-		*p = buf;
-		*sz = cmsg->size();
-		/* cmsg will be auto destroyed */
-	} else { /* we only got a desc. no chunk data */
-		*p = nullptr;
-		*sz = 0;
-	}
-}
-
-/* recv one chunk, and save it as a new file.
- *
- * return: 0 if the chunk is saved.
- * -1 if no chunk recv'd and this is just eof.
- *
- * XXX directly use msg.data(), instead of a copied buffer */
-int recv_one_chunk_tofile(zmq::socket_t &s, data_desc *desc,
-													const char *fname) {
-
-	xzl_bug_on(!fname);
-
-	char * buf = nullptr;
-	size_t sz;
-	recv_one_chunk_to_buf(s, desc, &buf, &sz);
-	int ret;
-
-	if (buf) {
-		I("going to write to file. sz = %lu", sz);
-
-		/* write the chunk to file */
-		FILE *f = fopen(fname, "wb");
-		xzl_bug_on_msg(!f, "failed to cr file");
-		auto ret = fwrite(buf, 1, sz, f);
-		if (ret != sz)
-			perror("failed to write");
-
-		xzl_bug_on(ret != sz);
-		fclose(f);
-		I("written chunk to file %s", fname);
-
-		free(buf);
-		ret = 0;
-
-		k2_measure("file written");
-
-	} else {
-		xzl_assert(sz == 0);
-		ret = -1;
-	}
-
-	return ret;
-}
 
 int send_one_fb(feedback const & fb, zmq::socket_t &sender)
 {
@@ -564,4 +443,125 @@ shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, data_desc *fdesc
 		*fdesc = desc;
 
 	return cmsg;
+}
+
+/* recv a desc msg and a chunk msg.
+ *
+ * for the chunk msg,
+ * return a shared ptr of msg, so that we can access its data() later
+ * [ there seems no safe way of moving out its data. ]
+ *
+ * if the desc indicates eof of a chunk seq, there will be no chunk data.
+ * in that case, @desc will be filled but nullptr will be returned.
+ *
+ */
+shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
+//	zmq::context_t context(1 /* # io threads */);
+
+	{
+		/* recv the desc */
+		zmq::message_t dmsg;
+		s.recv(&dmsg);
+		I("got desc msg. msg size =%lu", dmsg.size());
+
+		string s((char const *)dmsg.data(), dmsg.size()); /* copy over */
+		istringstream ss(s);
+		boost::archive::text_iarchive ia(ss);
+
+		ia >> *desc;
+		I("%s", desc->to_string().c_str());
+
+		if (desc->type == TYPE_CHUNK_EOF) {
+			xzl_bug_on(dmsg.more());
+			return nullptr;
+		} else {
+			xzl_bug_on(desc->type != TYPE_CHUNK); /* can't be anything else */
+			xzl_bug_on(!dmsg.more()); /* there must be data */
+		}
+	}
+
+	{
+		/* recv the chunk */
+		auto cmsg = make_shared<zmq::message_t>();
+		xzl_bug_on(!cmsg);
+		auto ret = s.recv(cmsg.get());
+		xzl_bug_on(!ret); /* EAGAIN? */
+		I("got chunk msg. size =%lu", cmsg->size());
+
+		xzl_bug_on_msg(cmsg->more(), "multipart msg should end");
+
+		return cmsg;
+	}
+}
+
+/* recv a desc and a chunk from socket.
+ *
+ * this does memcpy since we assume encoded chunks won't be too large.
+ * However, @recv_one_chunk() enables zero-copy if that's desirable.
+ *
+ * @p: [OUT] mem buffer from malloc(). to be free'd by the caller
+ */
+void recv_one_chunk_to_buf(zmq::socket_t &s, data_desc *desc,
+													 char **p, size_t *sz) {
+
+	auto cmsg = recv_one_chunk(s, desc);
+
+	k2_measure("chunk recv'd");
+
+	if (cmsg) {
+		char *buf = (char *) malloc(cmsg->size());
+		xzl_bug_on(!buf);
+
+		memcpy(buf, cmsg->data(), cmsg->size());
+
+		*p = buf;
+		*sz = cmsg->size();
+		/* cmsg will be auto destroyed */
+	} else { /* we only got a desc. no chunk data */
+		*p = nullptr;
+		*sz = 0;
+	}
+}
+
+/* recv one chunk, and save it as a new file.
+ *
+ * return: 0 if the chunk is saved.
+ * -1 if no chunk recv'd and this is just eof.
+ *
+ * XXX directly use msg.data(), instead of a copied buffer */
+int recv_one_chunk_tofile(zmq::socket_t &s, data_desc *desc,
+													const char *fname) {
+
+	xzl_bug_on(!fname);
+
+	char * buf = nullptr;
+	size_t sz;
+	recv_one_chunk_to_buf(s, desc, &buf, &sz);
+	int ret;
+
+	if (buf) {
+		I("going to write to file. sz = %lu", sz);
+
+		/* write the chunk to file */
+		FILE *f = fopen(fname, "wb");
+		xzl_bug_on_msg(!f, "failed to cr file");
+		auto ret = fwrite(buf, 1, sz, f);
+		if (ret != sz)
+			perror("failed to write");
+
+		xzl_bug_on(ret != sz);
+		fclose(f);
+		I("written chunk to file %s", fname);
+
+		free(buf);
+		ret = 0;
+
+		k2_measure("file written");
+
+	} else {
+		xzl_assert(sz == 0);
+		ret = -1;
+	}
+
+	return ret;
 }

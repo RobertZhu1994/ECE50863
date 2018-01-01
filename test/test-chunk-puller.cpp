@@ -11,8 +11,9 @@
 
 #include "mm.h"
 #include "config.h"
-#include "msgfmt.h"
+#include "vs-types.h"
 #include "log.h"
+#include "rxtx.h"
 
 using namespace vs;
 

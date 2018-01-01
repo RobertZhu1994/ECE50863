@@ -57,7 +57,7 @@ char input_dir[] = "/shared/videos/seg/";
 
 /* return a vector of full path string */
 #include <dirent.h>
-#include <msgfmt.h>
+#include <vs-types.h>
 
 vector<string> get_all_files_dir(char * dirpath)
 {

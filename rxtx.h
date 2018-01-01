@@ -8,7 +8,7 @@
 #include <memory>
 
 #include <zmq.hpp>
-#include "msgfmt.h"
+#include "vs-types.h"
 #include "mm.h"
 
 int send_one_fb(vs::feedback const & fb, zmq::socket_t &sender);
@@ -36,5 +36,14 @@ void send_raw_eof(vs::cid_t const & cid, unsigned int frame_seq, zmq::socket_t &
 void send_decoded_eof(vs::cid_t const & cid, unsigned int chunk_seq, unsigned int frame_seq, zmq::socket_t & sender);
 
 //int send_all_stream_info(zmq::socket_t & sender);
+
+std::shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t &s,
+																							 vs::data_desc *desc);
+
+void recv_one_chunk_to_buf(zmq::socket_t & s, vs::data_desc *desc,
+													 char **p, size_t *sz);
+
+int recv_one_chunk_tofile(zmq::socket_t &s, vs::data_desc *desc,
+													const char *fname);
 
 #endif //VIDEO_STREAMER_RXTX_H

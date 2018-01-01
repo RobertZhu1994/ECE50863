@@ -4,7 +4,7 @@
 
 #include <zmq.hpp>
 #include "log.h"
-#include "msgfmt.h"
+#include "vs-types.h"
 #include "config.h"
 #include "rxtx.h"
 

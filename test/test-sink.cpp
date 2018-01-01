@@ -8,10 +8,11 @@
 #include <zmq.hpp>
 
 #include "config.h"
-#include "msgfmt.h"
+#include "vs-types.h"
 #include "mydecoder.h"
 #include "log.h"
 #include "rxtx.h"
+#include "rx-manager.h"
 
 #include "StatCollector.h"
 #include "CallBackTimer.h"

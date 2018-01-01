@@ -11,7 +11,7 @@
 
 #include <sstream> // std::ostringstream
 
-#include "msgfmt.h"
+#include "vs-types.h"
 #include "log.h"
 
 using namespace std;

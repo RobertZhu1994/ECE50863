@@ -5,7 +5,7 @@
 #include <lmdb.h>
 #include <zmq.hpp>
 
-#include "msgfmt.h"
+#include "vs-types.h"
 #include "mydecoder.h"
 #include "mm.h"
 #include "log.h"
