@@ -3,6 +3,10 @@
 //
 // tester: pull frames from a
 
+#ifdef DEBUG
+#define GLIBCXX_DEBUG 1 // debugging
+#endif
+
 #include <sstream> // std::ostringstream
 
 #include <zmq.hpp>
@@ -50,10 +54,11 @@ int main (int argc, char *argv[])
 	EE("bound to %s. wait for workers to push ...", FRAME_PULL_ADDR);
 
 	CallBackTimer stat_collector;
+	RxManager mg;
 
 	stat_collector.start(200 /*ms, check interval */, &getStatistics);
 
-	size_t sz = 1;
+//	size_t sz = 1;
 	while (1) {
 #if 0
 		unsigned seq = recv_one_frame(receiver, &sz);
@@ -65,9 +70,11 @@ int main (int argc, char *argv[])
 		data_desc desc;
 		auto msg_ptr = recv_one_frame(receiver, &desc);
 		if (!msg_ptr) {
+			mg.DepositADesc(desc);
 			EE("got desc: %s", desc.to_string().c_str());
 		} else {
 //			EE("sz %lu", sz);
+			mg.DepositAFrame(desc, msg_ptr);
 			stat.inc_byte_counter((int) msg_ptr->size());
 			stat.inc_rec_counter(1);
 		}

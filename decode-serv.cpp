@@ -4,7 +4,6 @@
 
 #include <zmq.hpp>
 #include <iostream>
-#include <boost/program_options.hpp>
 
 #include "config.h"
 #include "mydecoder.h"
@@ -16,6 +15,8 @@
 
 using namespace std;
 using namespace vs;
+
+#include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
 
@@ -110,8 +111,6 @@ void parse_options(int ac, char *av[], serv_config* config)
 	}
 }
 
-#undef _GLIBCXX_DEBUG /* does not get along with program options lib */
-
 int main(int ac, char * av[])
 {
 	parse_options(ac, av, &the_config);
@@ -151,6 +150,7 @@ int main(int ac, char * av[])
 			if (recv_one_chunk_tofile(recver, &desc, fname) == 0)
 				decode_one_file_hw(fname, sender, desc);
 			else {
+				if (desc.type != TYPE_CHUNK_EOF) EE("type is %d", desc.type);
 				xzl_bug_on(desc.type != TYPE_CHUNK_EOF);
 				/* pass through this message to sink */
 				send_chunk_eof(desc.cid, desc.c_seq, sender);

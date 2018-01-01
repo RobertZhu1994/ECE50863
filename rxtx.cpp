@@ -145,7 +145,7 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 	/* send the eof -- depending whether we are sending frames or chunks */
 	switch (temp_desc.type) {
 		case TYPE_RAW_FRAME:
-			send_raw_eof(temp_desc.cid, cnt, s);
+			send_raw_eof(temp_desc.cid, temp_desc.c_seq, cnt, s);
 			break;
 		case TYPE_CHUNK:
 			send_chunk_eof(temp_desc.cid, cnt, s);
@@ -331,11 +331,13 @@ void send_chunk_eof(cid_t const & cid, unsigned int chunk_seq, zmq::socket_t & s
 	xzl_bug_on(ret != 0);
 }
 
-void send_raw_eof(cid_t const & cid, unsigned int frame_seq, zmq::socket_t & sender) {
+/* we still need @chunk_seq, even a dummy one (like 0) */
+void send_raw_eof(cid_t const & cid, unsigned int chunk_seq, unsigned int frame_seq, zmq::socket_t & sender) {
 	data_desc desc(TYPE_RAW_FRAME_EOF);
 
 	desc.cid.stream_id = cid.stream_id; /* only stream id matters */
 	/* chunk seq does not matter? */
+	desc.c_seq = chunk_seq;
 	desc.f_seq = frame_seq;
 
 	auto ret = send_one_frame(nullptr, 0, sender, desc);
@@ -537,7 +539,7 @@ int recv_one_chunk_tofile(zmq::socket_t &s, data_desc *desc,
 	char * buf = nullptr;
 	size_t sz;
 	recv_one_chunk_to_buf(s, desc, &buf, &sz);
-	int ret;
+	int rc;
 
 	if (buf) {
 		I("going to write to file. sz = %lu", sz);
@@ -554,14 +556,16 @@ int recv_one_chunk_tofile(zmq::socket_t &s, data_desc *desc,
 		I("written chunk to file %s", fname);
 
 		free(buf);
-		ret = 0;
+		rc = 0;
 
 		k2_measure("file written");
 
 	} else {
+		I("desc only. nothing to write to file");
 		xzl_assert(sz == 0);
-		ret = -1;
+		rc = -1;
 	}
 
-	return ret;
+	I("return %d", rc);
+	return rc;
 }

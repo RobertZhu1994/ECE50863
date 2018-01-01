@@ -32,7 +32,7 @@ unsigned recv_one_frame(zmq::socket_t & recv, size_t* sz = nullptr, vs::data_des
 std::shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, vs::data_desc *fdesc);
 
 void send_chunk_eof(vs::cid_t const & cid, unsigned int chunk_seq, zmq::socket_t & sender);
-void send_raw_eof(vs::cid_t const & cid, unsigned int frame_seq, zmq::socket_t & sender);
+void send_raw_eof(vs::cid_t const & cid, unsigned int chunk_seq, unsigned int frame_seq, zmq::socket_t & sender);
 void send_decoded_eof(vs::cid_t const & cid, unsigned int chunk_seq, unsigned int frame_seq, zmq::socket_t & sender);
 
 //int send_all_stream_info(zmq::socket_t & sender);

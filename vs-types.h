@@ -105,6 +105,10 @@ namespace vs {
 || x == TYPE_RAW_FRAME \
 || x == TYPE_DECODED_FRAME)
 
+#define is_type_frame(x) \
+		(x == TYPE_RAW_FRAME \
+|| x == TYPE_DECODED_FRAME)
+
 	/* defined in stream-info */
 	extern std::array<const char *, TYPE_INVALID + 1> data_type_str;
 

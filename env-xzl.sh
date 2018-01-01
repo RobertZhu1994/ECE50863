@@ -103,6 +103,8 @@ build-all() {
 }
 
 
+mkdir -p /tmp/xzl/Debug
+mkdir -p /tmp/xzl/Release
 
 echo "script loaded"
 echo "ARCH=" ${ARCH}
