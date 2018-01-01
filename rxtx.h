@@ -11,8 +11,8 @@
 #include "vs-types.h"
 #include "mm.h"
 
+/* send/recv perf feedback */
 int send_one_fb(vs::feedback const & fb, zmq::socket_t &sender);
-
 bool recv_one_fb(zmq::socket_t &s, vs::feedback * fb, bool blocking);
 
 unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, vs::cid_t start, vs::cid_t end, zmq::socket_t &s,

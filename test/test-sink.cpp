@@ -16,7 +16,7 @@
 #include "mydecoder.h"
 #include "log.h"
 #include "rxtx.h"
-#include "rx-manager.h"
+#include "RxManager.h"
 
 #include "StatCollector.h"
 #include "CallBackTimer.h"
