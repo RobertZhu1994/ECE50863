@@ -71,13 +71,29 @@ int main (int argc, char *argv[])
 		auto msg_ptr = recv_one_frame(receiver, &desc);
 		if (!msg_ptr) {
 			mg.DepositADesc(desc);
-			EE("got desc: %s", desc.to_string().c_str());
+			I("got desc: %s", desc.to_string().c_str());
+			if (desc.type == TYPE_CHUNK_EOF)
+				break;
 		} else {
-//			EE("sz %lu", sz);
 			mg.DepositAFrame(desc, msg_ptr);
 			stat.inc_byte_counter((int) msg_ptr->size());
 			stat.inc_rec_counter(1);
 		}
+	}
+
+	/* consumption phase */
+	Frame f;
+	int rc;
+	seq_t wm_c, wm_f;
+	while (true) {
+
+		mg.GetWatermarks(&wm_c, &wm_f);
+		I("watermarks:  chunk %u frame %u", wm_c, wm_f);
+
+		rc = mg.RetrieveAFrame(&f);
+		if (rc == VS_ERR_EOF_CHUNKS)
+			break;
+		xzl_bug_on(rc != 0);
 	}
 
 	/* XXX stop the stat collector */

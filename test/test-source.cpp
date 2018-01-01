@@ -129,8 +129,8 @@ void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int typ
 
 //	data_desc temp_desc(type);
 
-	unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
-//	unsigned cnt = send_multi_from_db(env, dbi, 0, 1000 * 1000, sender, temp_desc);
+//	unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
+	unsigned cnt = send_multi_from_db(env, dbi, 0, 1000 * 1000, sender, temp_desc);
 
 	/* -- wait for all outstanding? -- */
 	sleep (10);

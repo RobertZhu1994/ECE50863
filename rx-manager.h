@@ -137,7 +137,7 @@ namespace vs {
 
 			if (desc.type == TYPE_CHUNK_EOF) {
 				xzl_bug_on_msg(eof_c >= 0, "dup chunk eof?");
-				xzl_bug_on_msg(desc.c_seq <= chunks.rbegin()->first,
+				xzl_bug_on_msg(chunks.rbegin() != chunks.rend() && desc.c_seq <= chunks.rbegin()->first,
 											 "eof smaller than existing last chunk seq?");
 				eof_c = desc.c_seq;
 				return;
@@ -176,13 +176,13 @@ namespace vs {
 		again:
 			if (wm_chunk == eof_c) { /* we're done! */
 				xzl_bug_on(wm_frame != 0);
-				return - VS_ERR_EOF_CHUNKS;
+				return VS_ERR_EOF_CHUNKS;
 			}
 
 			auto it_chunk = chunks.find(wm_chunk);
 			if (it_chunk == chunks.end()) {	/* chunk not arrived yet */
 				xzl_bug_on(wm_frame != 0);
-				return - VS_ERR_AGAIN;
+				return VS_ERR_AGAIN;
 			}
 
 			auto & chunk = chunks[wm_chunk];
@@ -199,7 +199,7 @@ namespace vs {
 				if (it == frames.end()) {
 					/* next frame has not arrived yet.
 					 * wm may point to a future eof_f, or a future frame */
-					return - VS_ERR_AGAIN;
+					return VS_ERR_AGAIN;
 				}
 
 				/* frame exists */
