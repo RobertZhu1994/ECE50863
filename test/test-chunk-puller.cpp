@@ -53,11 +53,12 @@ void recv_one_file(const char *fname /* to save */) {
 		xzl_bug_on(ret != 1);
 		fclose(f);
 		I("written chunk to file %s", fname);
-
+/*
 		if (cmsg.more())
 			I("there's more");
 		else
 			I("no more");
+*/
 	}
 
 }

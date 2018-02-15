@@ -123,6 +123,8 @@ void test_multi_env()
 		xzl_bug_on(rc != 0);
 	}
 
+	W("load from lmdb");
+	
 	/* db 1 */
 	{
 		rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
@@ -145,7 +147,7 @@ void test_multi_env()
 		mdb_txn_abort(txn);
 	}
 
-	W("load from db2");
+	W("load from lmdb-rf");
 
 	/* db 2 */
 	{

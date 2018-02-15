@@ -69,6 +69,7 @@ int main (int argc, char *argv[])
 
 		data_desc desc;
 		auto msg_ptr = recv_one_frame(receiver, &desc);
+
 		if (!msg_ptr) {
 			mg.DepositADesc(desc);
 			I("got desc: %s", desc.to_string().c_str());
@@ -91,6 +92,8 @@ int main (int argc, char *argv[])
 		I("watermarks:  chunk %u frame %u", wm_c, wm_f);
 
 		rc = mg.RetrieveAFrame(&f);
+		cout << rc << endl;
+
 		if (rc == VS_ERR_EOF_CHUNKS)
 			break;
 		xzl_bug_on(rc != 0);

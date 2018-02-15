@@ -6,6 +6,8 @@
 #include <lmdb.h>
 #include <sstream>
 #include <zmq.hpp>
+//#include "zmq.hpp"
+//#include "zhelpers.hpp"
 extern "C" {
 #include <libavutil/mem.h>
 #include "measure.h"
@@ -37,7 +39,10 @@ int send_one_fb(feedback const & fb, zmq::socket_t &sender)
 	oa << fb;
 	string s = oss.str();
 
-	zmq::message_t dmsg(s.begin(), s.end());
+	/* desc msg. explicit copy content over */
+	zmq::message_t dmsg(s.size());
+	memcpy(dmsg.data(), s.c_str(), s.size());
+	//zmq::message_t dmsg(s.begin(), s.end());
 	auto sz = dmsg.size();
 
 	auto ret = sender.send(dmsg);
@@ -55,7 +60,7 @@ bool recv_one_fb(zmq::socket_t &s, feedback * fb, bool blocking = false)
 	zmq::message_t dmsg;
 	xzl_bug_on(!fb);
 
-	bool ret = s.recv(&dmsg, blocking ? 0 : ZMQ_DONTWAIT);
+	bool ret = s.recv(&dmsg, blocking ? 0 : ZMQ_NOBLOCK);
 //	bool ret = s.recv(&dmsg);
 
 	if (ret) {
@@ -192,7 +197,10 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 		oa << fdesc;
 		string s = oss.str();
 
-		zmq::message_t dmsg(s.begin(), s.end());
+		/* desc msg. explicit copy content over */
+		zmq::message_t dmsg(s.size());
+		memcpy(dmsg.data(), s.c_str(), s.size());
+		//zmq::message_t dmsg(s.begin(), s.end());
 		sender.send(dmsg, 0); /* no more */
 
 		return 0;
@@ -206,7 +214,10 @@ int send_one_frame(uint8_t *buffer, int size, zmq::socket_t &sender,
 		oa << fdesc;
 		string s = oss.str();
 
-		zmq::message_t dmsg(s.begin(), s.end());
+		/* desc msg. explicit copy content over */
+		zmq::message_t dmsg(s.size());
+		memcpy(dmsg.data(), s.c_str(), s.size());
+		//zmq::message_t dmsg(s.begin(), s.end());
 		sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
 
 		VV("desc sent");
@@ -272,7 +283,10 @@ int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
 	oa << fdesc;
 	string s = oss.str();
 
-	zmq::message_t dmsg(s.begin(), s.end());
+	/* desc msg. explicit copy content over */
+	zmq::message_t dmsg(s.size());
+	memcpy(dmsg.data(), s.c_str(), s.size());
+	//zmq::message_t dmsg(s.begin(), s.end());
 	sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
 
 	VV("desc sent");
@@ -303,7 +317,10 @@ int send_one_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 	oa << desc;
 	string s = oss.str();
 
-	zmq::message_t dmsg(s.begin(), s.end());
+	/* desc msg. explicit copy content over */
+	zmq::message_t dmsg(s.size());
+	memcpy(dmsg.data(), s.c_str(), s.size());
+	//zmq::message_t dmsg(s.begin(), s.end());
 	sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
 
 	VV("desc sent");
@@ -368,6 +385,7 @@ unsigned recv_one_frame(zmq::socket_t & recv, size_t* sz, data_desc *fdesc) {
 
 	data_desc desc;
 	zmq::message_t dmsg;
+    int rc;
 
 	{
 		/* recv the desc */
@@ -382,12 +400,16 @@ unsigned recv_one_frame(zmq::socket_t & recv, size_t* sz, data_desc *fdesc) {
 		I("%s", desc.to_string().c_str());
 	}
 
-	if (dmsg.more()) {	/* there's a frame for the desc. get it. */
+	//if (dmsg.more())
+    //teddyxu:check if we have more parts
+    rc = zmq_getsockopt (recv, ZMQ_RCVMORE, &dmsg, sz);
+    if(rc == 1)
+    {	/* there's a frame for the desc. get it. */
 		zmq::message_t cmsg;
 		recv.recv(&cmsg);
 		I("got frame msg. size =%lu", cmsg.size());
 
-		xzl_bug_on_msg(cmsg.more(), "there should be no more");
+		//xzl_bug_on_msg(cmsg.more(), "there should be no more");
 
 		if (sz)
 			*sz = cmsg.size();
@@ -414,6 +436,8 @@ shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, data_desc *fdesc
 
 	shared_ptr<zmq::message_t> cmsg = nullptr;
 
+    int rc;
+
 	{
 		/* recv the desc */
 		recv.recv(&dmsg);
@@ -428,15 +452,24 @@ shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, data_desc *fdesc
 			data_type_str[desc.type], desc.cid.as_uint, desc.c_seq, desc.f_seq);
 	}
 
-	if (dmsg.more()) {	/* there's a frame for the desc. get it. */
+	//if (dmsg.more())
+    //size_t sz = dmsg.size();
+    //rc = zmq_getsockopt (recv, ZMQ_RCVMORE, &dmsg, &sz);
+    //cout << "rc = " << rc << endl;
+    //if(rc == 0)
+    if(1)
+    {	/* there's a frame for the desc. get it. */
 		cmsg = make_shared<zmq::message_t>();
 		xzl_bug_on(!cmsg);
 
 		auto ret = recv.recv(cmsg.get());
+        //if(ret != 1) return nullptr;
+        //cout << ret << endl;
+
 		xzl_bug_on(!ret); /* EAGAIN? */
 		I("got chunk msg. size =%lu", cmsg->size());
 
-		xzl_bug_on_msg(cmsg->more(), "there should be no more");
+		//xzl_bug_on_msg(cmsg->more(), "there should be no more");
 	} else {
 		xzl_bug_on(desc.type != TYPE_CHUNK_EOF && desc.type != TYPE_DECODED_FRAME_EOF && desc.type != TYPE_RAW_FRAME_EOF);
 	}
@@ -474,11 +507,11 @@ shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
 		I("%s", desc->to_string().c_str());
 
 		if (desc->type == TYPE_CHUNK_EOF) {
-			xzl_bug_on(dmsg.more());
+			//xzl_bug_on(dmsg.more());
 			return nullptr;
 		} else {
 			xzl_bug_on(desc->type != TYPE_CHUNK); /* can't be anything else */
-			xzl_bug_on(!dmsg.more()); /* there must be data */
+			//xzl_bug_on(!dmsg.more()); /* there must be data */
 		}
 	}
 
@@ -490,7 +523,7 @@ shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
 		xzl_bug_on(!ret); /* EAGAIN? */
 		I("got chunk msg. size =%lu", cmsg->size());
 
-		xzl_bug_on_msg(cmsg->more(), "multipart msg should end");
+		//xzl_bug_on_msg(cmsg->more(), "multipart msg should end");
 
 		return cmsg;
 	}

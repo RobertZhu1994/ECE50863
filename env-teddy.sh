@@ -5,11 +5,11 @@
 #SERVER=knl
 SERVER=k2
 #SERVER=localhost
-LOCAL_PATH=/home/xzl/video-streamer
-REMOTE_PATH=$SERVER:/home/xzl/video-streamer
+#LOCAL_PATH=/home/xzl/video-streamer
+#REMOTE_PATH=$SERVER:/home/xzl/video-streamer
 
-#LOCAL_PATH=/home/teddyxu/video-streamer
-#REMOTE_PATH=$SERVER:/home/teddyxu/video-streamer
+LOCAL_PATH=/home/teddyxu/video-streamer
+REMOTE_PATH=$SERVER:/home/teddyxu/video-streamer
 
 # this causes terminal killed. why?
 #set -e 
@@ -107,11 +107,11 @@ build-all() {
 }
 
 
-mkdir -p /tmp/xzl/Debug
-mkdir -p /tmp/xzl/Release
+#mkdir -p /tmp/xzl/Debug
+#mkdir -p /tmp/xzl/Release
 
-#mkdir -p /tmp/teddyxu/Debug
-#mkdir -p /tmp/teddyxu/Release
+mkdir -p /tmp/teddyxu/Debug
+mkdir -p /tmp/teddyxu/Release
 
 echo "script loaded"
 echo "ARCH=" ${ARCH}

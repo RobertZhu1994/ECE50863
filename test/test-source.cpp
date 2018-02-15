@@ -74,9 +74,10 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
 	string s = oss.str();
 
 	/* desc msg. explicit copy content over */
-//		zmq::message_t dmsg(s.size());
-//		memcpy(dmsg.data(), s.c_str(), s.size());
-	zmq::message_t dmsg(s.begin(), s.end());
+	zmq::message_t dmsg(s.size());
+	memcpy(dmsg.data(), s.c_str(), s.size());
+	//zmq::message_t dmsg(s.begin(), s.end());
+	//zmq::message_t dmsg(s.size());
 	sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
 
 	I("desc sent");
@@ -129,8 +130,8 @@ void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int typ
 
 //	data_desc temp_desc(type);
 
-//	unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
-	unsigned cnt = send_multi_from_db(env, dbi, 0, 1000 * 1000, sender, temp_desc);
+	unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
+//	unsigned cnt = send_multi_from_db(env, dbi, 0, 1000 * 1000, sender, temp_desc);
 
 	/* -- wait for all outstanding? -- */
 	sleep (10);
@@ -252,8 +253,8 @@ int main (int argc, char *argv[])
 
 //	test_send_raw_frames_from_file(argv[1], s_frame);
 
-	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
-//	test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
+//	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
+	test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
 
 //	rc = pthread_join(si_server, nullptr); /* will never join.... XXX */
 //	xzl_bug_on(rc != 0);

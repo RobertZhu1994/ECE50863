@@ -35,11 +35,13 @@ include_directories(
         ./
         /shared/ffmpeg/include
         /shared/libzmq/include
+        /usr/local/include
 )
 
 link_directories(
         /shared/ffmpeg/lib
         /shared/libzmq/lib
+		/usr/local/lib
 )
 
 
@@ -95,8 +97,9 @@ SET (FFMPEG_LIBS
         swresample
         swscale
         avutil
-        #				X11 va-x11 va-drm  va # intel's video accel lib etc
-                vdpau  # nvidia decoding & presentation
+		postproc
+		#X11 va-x11 va-drm  va # intel's video accel lib etc
+		vdpau  # nvidia decoding & presentation
         )
 
 SET (COMMON_LIBS
@@ -148,7 +151,7 @@ TARGET_LINK_LIBRARIES(hw_decode.bin
 ########################################
 add_executable(demuxing_decoding.bin
         examples/demuxing_decoding.c
-        )
+		)
 TARGET_LINK_LIBRARIES(demuxing_decoding.bin
         ${FFMPEG_LIBS}
         ${COMMON_LIBS}

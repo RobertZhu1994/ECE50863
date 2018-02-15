@@ -208,6 +208,7 @@ void build_raw_frame_db(const char *fname)
 	rc = mdb_env_set_maxdbs(env, 1); /* required for named db */
 	xzl_bug_on(rc != 0);
 
+	EE("going to open db path %s", DB_RAW_FRAME_PATH);
 	rc = mdb_env_open(env, DB_RAW_FRAME_PATH, 0, 0664);
 	xzl_bug_on(rc != 0);
 
@@ -263,8 +264,8 @@ void build_raw_frame_db(const char *fname)
 
 int main() {
 
-//	build_chunk_db();
-	build_raw_frame_db(input_raw_video);
+	build_chunk_db();
+//	build_raw_frame_db(input_raw_video);
 
 	return 0;
 }
