@@ -479,7 +479,12 @@ namespace alpr
 
   AlprResults AlprImpl::recognize(cv::Mat img, std::vector<cv::Rect> regionsOfInterest)
   {
+    timespec startTime;
+    timespec endTime;
+    getTimeMonotonic(&startTime);
     AlprFullDetails fullDetails = recognizeFullDetails(img, regionsOfInterest);
+    getTimeMonotonic(&endTime);
+    std::cout << "recognizeFullDetails: " << diffclock(startTime, endTime) << "ms." << std::endl;
     return fullDetails.results;
   }
 

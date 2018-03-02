@@ -53,6 +53,8 @@ cv::Rect MotionDetector::MotionDetect(cv::Mat* frame)
 	// Find the contours of motion areas in the image
 	findContours(fgMaskMOG2, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
 	// Find the bounding rectangles of the areas of motion
+
+
 	if (contours.size() > 0)
 	{
 		for (int i = 0; i < contours.size(); i++)
@@ -79,7 +81,7 @@ cv::Rect MotionDetector::MotionDetect(cv::Mat* frame)
           largest_rect.width = 0;
           largest_rect.height = 0;
         }
-		
+
 //	imshow("Motion detect", fgMaskMOG2);
 	return expandRect(largest_rect, 0, 0, frame->cols, frame->rows);
 }

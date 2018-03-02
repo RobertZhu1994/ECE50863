@@ -57,6 +57,10 @@
 #include "openalpr/motiondetector.h"
 #include "openalpr/alpr.h"
 
+extern "C"{
+#include <omp.h>
+};
+
 using namespace vs;
 using namespace alpr;
 
@@ -65,7 +69,7 @@ const std::string MAIN_WINDOW_NAME = "ALPR main window";
 const bool SAVE_LAST_VIDEO_STILL = false;
 const std::string LAST_VIDEO_STILL_LOCATION = "/tmp/laststill.jpg";
 const std::string WEBCAM_PREFIX = "/dev/video";
-MotionDetector motiondetector;
+//MotionDetector motiondetector;
 bool do_motiondetection = true;
 
 /** Function Headers */
@@ -101,9 +105,10 @@ void getAllStreamInfo() {
 
 }
 
-bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson)
+bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson, int chunk_id)
 {
 
+    MotionDetector motiondetector[4];
     timespec startTime;
     //getTimeMonotonic(&startTime);
 
@@ -117,14 +122,16 @@ bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJso
     }
     else regionsOfInterest.push_back(AlprRegionOfInterest(0, 0, frame.cols, frame.rows));
     */
-    k2_measure("motion detection start");
+    //k2_measure("motion detection start");
     /* Motion detection phase */
-    cv::Rect rectan = motiondetector.MotionDetect(&frame);
+    cv::Rect rectan = motiondetector[chunk_id].MotionDetect(&frame);
+    //k2_measure("motion detection end");
     if (rectan.width>0) regionsOfInterest.push_back(AlprRegionOfInterest(rectan.x, rectan.y, rectan.width, rectan.height));
-    k2_measure("motion detection end");
+
     timespec endTime;
+    cout << "ROI size = " << regionsOfInterest.size() << endl;
     //getTimeMonotonic(&endTime);
-    k2_measure_flush();
+    //k2_measure_flush();
     cout << rectan.x << " " <<  rectan.y << " " << rectan.width << " " << rectan.height << " " << endl;
     //std::cout << "Motion Detection: " << diffclock(startTime, endTime) << "ms." << std::endl;
 
@@ -135,7 +142,7 @@ bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJso
     getTimeMonotonic(&endTime);
     //double totalProcessingTime = diffclock(startTime, endTime);
 
-    std::cout << "Plate Recognition: " << diffclock(startTime, endTime) << "ms." << std::endl;
+    std::cout << "Total Plate Recognition: " << diffclock(startTime, endTime) << "ms." << std::endl;
 
     /*
     if (measureProcessingTime) {
@@ -227,100 +234,125 @@ int main (int argc, char *argv[])
 	seq_t wm_c, wm_f;
 	while (true) {
 
-		mg.GetWatermarks(&wm_c, &wm_f);
-		I("watermarks:  chunk %u frame %u", wm_c, wm_f);
+            /* teddyxu: alpr starts here */
+            //std::vector<std::string> filenames;
+            std::string configFile = "";
+            bool outputJson = false;
+            int seektoms = 0;
+            bool detectRegion = false;
+            std::string country;
+            int topn;
+            bool debug_mode = false;
 
-		rc = mg.RetrieveAFrame(&f);
-        //cout << f.msg_p << endl;
+            TCLAP::CmdLine cmd("OpenAlpr Command Line Utility", ' ', Alpr::getVersion());
 
-
-        /* teddyxu: alpr starts here */
-        //std::vector<std::string> filenames;
-        std::string configFile = "";
-        bool outputJson = false;
-        int seektoms = 0;
-        bool detectRegion = false;
-        std::string country;
-        int topn;
-        bool debug_mode = false;
-
-        TCLAP::CmdLine cmd("OpenAlpr Command Line Utility", ' ', Alpr::getVersion());
-
-        TCLAP::UnlabeledMultiArg<std::string>  fileArg( "image_file", "Image containing license plates", true, "", "image_file_path"  );
+            TCLAP::UnlabeledMultiArg<std::string> fileArg("image_file", "Image containing license plates", true, "",
+                                                          "image_file_path");
 
 
-        TCLAP::ValueArg<std::string> countryCodeArg("c","country","Country code to identify (either us for USA or eu for Europe).  Default=us",false, "us" ,"country_code");
-        TCLAP::ValueArg<int> seekToMsArg("","seek","Seek to the specified millisecond in a video file. Default=0",false, 0 ,"integer_ms");
-        TCLAP::ValueArg<std::string> configFileArg("","config","Path to the openalpr.conf file",false, "" ,"config_file");
-        TCLAP::ValueArg<std::string> templatePatternArg("p","pattern","Attempt to match the plate number against a plate pattern (e.g., md for Maryland, ca for California)",false, "" ,"pattern code");
-        TCLAP::ValueArg<int> topNArg("n","topn","Max number of possible plate numbers to return.  Default=10",false, 10 ,"topN");
+            TCLAP::ValueArg<std::string> countryCodeArg("c", "country",
+                                                        "Country code to identify (either us for USA or eu for Europe).  Default=us",
+                                                        false, "us", "country_code");
+            TCLAP::ValueArg<int> seekToMsArg("", "seek", "Seek to the specified millisecond in a video file. Default=0",
+                                             false, 0, "integer_ms");
+            TCLAP::ValueArg<std::string> configFileArg("", "config", "Path to the openalpr.conf file", false, "",
+                                                       "config_file");
+            TCLAP::ValueArg<std::string> templatePatternArg("p", "pattern",
+                                                            "Attempt to match the plate number against a plate pattern (e.g., md for Maryland, ca for California)",
+                                                            false, "", "pattern code");
+            TCLAP::ValueArg<int> topNArg("n", "topn", "Max number of possible plate numbers to return.  Default=10",
+                                         false, 10, "topN");
 
-        TCLAP::SwitchArg jsonSwitch("j","json","Output recognition results in JSON format.  Default=off", cmd, false);
-        TCLAP::SwitchArg debugSwitch("","debug","Enable debug output.  Default=off", cmd, false);
-        TCLAP::SwitchArg detectRegionSwitch("d","detect_region","Attempt to detect the region of the plate image.  [Experimental]  Default=off", cmd, false);
-        TCLAP::SwitchArg clockSwitch("","clock","Measure/print the total time to process image and all plates.  Default=off", cmd, false);
-        TCLAP::SwitchArg motiondetect("", "motion", "Use motion detection on video file or stream.  Default=off", cmd, false);
+            TCLAP::SwitchArg jsonSwitch("j", "json", "Output recognition results in JSON format.  Default=off", cmd,
+                                        false);
+            TCLAP::SwitchArg debugSwitch("", "debug", "Enable debug output.  Default=off", cmd, false);
+            TCLAP::SwitchArg detectRegionSwitch("d", "detect_region",
+                                                "Attempt to detect the region of the plate image.  [Experimental]  Default=off",
+                                                cmd, false);
+            TCLAP::SwitchArg clockSwitch("", "clock",
+                                         "Measure/print the total time to process image and all plates.  Default=off",
+                                         cmd, false);
+            TCLAP::SwitchArg motiondetect("", "motion", "Use motion detection on video file or stream.  Default=off",
+                                          cmd, false);
 
 
-        try
+            try {
+                cmd.add(templatePatternArg);
+                cmd.add(seekToMsArg);
+                cmd.add(topNArg);
+                cmd.add(configFileArg);
+                cmd.add(fileArg);
+                cmd.add(countryCodeArg);
+
+                //filenames = fileArg.getValue();
+
+                country = countryCodeArg.getValue();
+                seektoms = seekToMsArg.getValue();
+                outputJson = jsonSwitch.getValue();
+                debug_mode = debugSwitch.getValue();
+                configFile = configFileArg.getValue();
+                detectRegion = detectRegionSwitch.getValue();
+                templatePattern = templatePatternArg.getValue();
+                topn = topNArg.getValue();
+                measureProcessingTime = clockSwitch.getValue();
+                do_motiondetection = motiondetect.getValue();
+            }
+            catch (TCLAP::ArgException &e)    // catch any exceptions
+            {
+                std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
+                return 1;
+            }
+
+        int chunk[4] = {0};
+        //timespec startTime;
+        //getTimeMonotonic(&startTime);
+        #pragma omp parallel num_threads(4)
         {
-            cmd.add( templatePatternArg );
-            cmd.add( seekToMsArg );
-            cmd.add( topNArg );
-            cmd.add( configFileArg );
-            cmd.add( fileArg );
-            cmd.add( countryCodeArg );
+            int id = omp_get_thread_num();
+            //mg.GetWatermarks(&wm_c, &wm_f);
 
-            //filenames = fileArg.getValue();
+            //I("proc %d ", id);
+            while (chunk[id] < 75) {
+                wm_c = 0;
+                wm_f = id * 75 + chunk[id];
 
-            country = countryCodeArg.getValue();
-            seektoms = seekToMsArg.getValue();
-            outputJson = jsonSwitch.getValue();
-            debug_mode = debugSwitch.getValue();
-            configFile = configFileArg.getValue();
-            detectRegion = detectRegionSwitch.getValue();
-            templatePattern = templatePatternArg.getValue();
-            topn = topNArg.getValue();
-            measureProcessingTime = clockSwitch.getValue();
-            do_motiondetection = motiondetect.getValue();
+                //mg.GetWatermarks(&wm_c, &wm_f);
+                I("watermarks:  chunk %u frame %u proc %d", wm_c, wm_f, id);
+                rc = mg.RetrieveAFrame(&f);
+
+                cv::Mat frame;
+                Alpr alpr(country, configFile);
+                alpr.setTopN(topn);
+
+                int framesize = 320 * 180;
+                char *imagedata = NULL;
+
+                imagedata = (char *) malloc(sizeof(char) * framesize);
+
+                imagedata = static_cast<char *>(f.msg_p->data()), f.msg_p->size();
+
+                frame.create(180, 320, CV_8UC1);
+
+                memcpy(frame.data, imagedata, framesize);
+
+                //cout << frame << endl;
+                I("frame %d", wm_f);
+                bool plate_found = detectandshow(&alpr, frame, "", outputJson, id);
+
+                if (!plate_found && !outputJson)
+                    std::cout << "No license plates found." << std::endl;
+
+
+                //if (rc == VS_ERR_EOF_CHUNKS)
+                //break;
+                xzl_bug_on(rc != 0);
+                //chunk[id] ++;
+            }
         }
-        catch (TCLAP::ArgException &e)    // catch any exceptions
-        {
-            std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
-            return 1;
-        }
-
-        cv::Mat frame;
-        Alpr alpr(country, configFile);
-        alpr.setTopN(topn);
-
-        int framesize = 320*180;
-        char *imagedata = NULL;
-        //string imagedata;
-
-        imagedata = (char*) malloc (sizeof(char) * framesize);
-
-        imagedata = static_cast<char*>(f.msg_p->data()), f.msg_p->size();
-
-        //fread(imagedata, sizeof(char), framesize, fp);
-
-        frame.create(180, 320, CV_8UC1);
-
-        memcpy(frame.data, imagedata, framesize);
-
-        //cout << frame << endl;
-
-        bool plate_found = detectandshow(&alpr, frame, "", outputJson);
-
-        if (!plate_found && !outputJson)
-            std::cout << "No license plates found." << std::endl;
-
-
-		if (rc == VS_ERR_EOF_CHUNKS)
-			break;
-		xzl_bug_on(rc != 0);
-	}
-
+        //timespec endTime;
+        //getTimeMonotonic(&endTime);
+        //std::cout << "Total: " << diffclock(startTime, endTime) << "ms." << std::endl;
+    }
 	/* XXX stop the stat collector */
 	stat_collector.stop();
 
