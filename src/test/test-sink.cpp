@@ -346,7 +346,7 @@ int main (int argc, char *argv[])
                 //if (rc == VS_ERR_EOF_CHUNKS)
                 //break;
                 xzl_bug_on(rc != 0);
-                //chunk[id] ++;
+                chunk[id] ++;
             }
         }
         //timespec endTime;
