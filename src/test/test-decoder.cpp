@@ -77,7 +77,7 @@ int main(int ac, char * av[])
 	xzl_bug_on(rc != 0);
 
 	data_desc desc;
-	decode_one_file_hw(fname_in, s, desc);
+	decode_one_file(fname_in, s, desc);
 
 	rc = pthread_join(sink, nullptr);
 

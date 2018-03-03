@@ -148,7 +148,7 @@ int main(int ac, char * av[])
 			xzl_bug_on(ret == -1);
 
 			if (recv_one_chunk_tofile(recver, &desc, fname) == 0)
-				decode_one_file_hw(fname, sender, desc);
+				decode_one_file(fname, sender, desc);
 			else {
 				if (desc.type != TYPE_CHUNK_EOF) EE("type is %d", desc.type);
 				xzl_bug_on(desc.type != TYPE_CHUNK_EOF);

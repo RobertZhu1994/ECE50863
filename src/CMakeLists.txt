@@ -238,7 +238,7 @@ add_custom_command(TARGET ${BINARY} POST_BUILD
         COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
         )
 ########################################
-SET(PROGRAM serv)
+SET(PROGRAM decode-serv)
 add_executable(${PROGRAM}.bin
         decode-serv.cpp
         )

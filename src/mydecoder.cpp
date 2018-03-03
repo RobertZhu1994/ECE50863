@@ -188,9 +188,11 @@ static int decode_write_hw(AVCodecContext *avctx, AVPacket *packet,
 
 /* decode one file and write frames to @sender.
  * will send the last desc of frame seq with no data.
+ *
+ * can use both sw and hw, depending on @is_use_hw
  * */
-int decode_one_file_hw(const char *fname, zmq::socket_t &sender,
-											 data_desc const &cdesc /* chunk info */) {
+int decode_one_file(const char *fname, zmq::socket_t &sender,
+										const data_desc &cdesc /* chunk info */) {
 
 	AVFormatContext *input_ctx = NULL;
 	int video_stream = -1, ret;
