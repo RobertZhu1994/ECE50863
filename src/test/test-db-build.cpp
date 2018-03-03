@@ -164,7 +164,7 @@ char input_raw_video[] = "/shared/videos/clip2.yuv";
 static int height = 180;
 static int width = 320;
 static int yuv_mode = 420;
-static int fps = 10;
+static int fps = 30;
 
 /* @fname: the raw video file.
  * each k/v is a frame; v is often hundred KB */

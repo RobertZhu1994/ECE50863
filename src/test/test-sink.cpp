@@ -105,10 +105,12 @@ void getAllStreamInfo() {
 
 }
 
-bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson, int chunk_id)
+//bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson, int proc_id)
+bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson)
 {
 
-    MotionDetector motiondetector[4];
+    //MotionDetector motiondetector[20];
+    MotionDetector motiondetector;
     timespec startTime;
     //getTimeMonotonic(&startTime);
 
@@ -122,14 +124,14 @@ bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJso
     }
     else regionsOfInterest.push_back(AlprRegionOfInterest(0, 0, frame.cols, frame.rows));
     */
-    //k2_measure("motion detection start");
+
     /* Motion detection phase */
-    cv::Rect rectan = motiondetector[chunk_id].MotionDetect(&frame);
-    //k2_measure("motion detection end");
+    //cv::Rect rectan = motiondetector[proc_id].MotionDetect(&frame);
+    cv::Rect rectan = motiondetector.MotionDetect(&frame);
     if (rectan.width>0) regionsOfInterest.push_back(AlprRegionOfInterest(rectan.x, rectan.y, rectan.width, rectan.height));
 
     timespec endTime;
-    cout << "ROI size = " << regionsOfInterest.size() << endl;
+    //cout << "ROI size = " << regionsOfInterest.size() << endl;
     //getTimeMonotonic(&endTime);
     //k2_measure_flush();
     cout << rectan.x << " " <<  rectan.y << " " << rectan.width << " " << rectan.height << " " << endl;
@@ -215,7 +217,7 @@ int main (int argc, char *argv[])
 			mg.DepositADesc(desc);
 			I("got desc: %s", desc.to_string().c_str());
 			if (desc.type == TYPE_CHUNK_EOF || desc.type == TYPE_RAW_FRAME_EOF) {
-                cout << "teddy: end of chunk" << endl;
+                //cout << "teddy: end of chunk" << endl;
                 break;
             }
 		} else {
@@ -227,7 +229,7 @@ int main (int argc, char *argv[])
         }
 	}
 
-	cout << "after the first loop" << endl;
+	//cout << "after the first loop" << endl;
 	/* consumption phase */
 	Frame f;
 	int rc;
@@ -303,21 +305,20 @@ int main (int argc, char *argv[])
                 return 1;
             }
 
-        int chunk[4] = {0};
-        //timespec startTime;
-        //getTimeMonotonic(&startTime);
-        #pragma omp parallel num_threads(4)
-        {
-            int id = omp_get_thread_num();
-            //mg.GetWatermarks(&wm_c, &wm_f);
+        //int chunk[20] = {0};
+
+        //#pragma omp parallel num_threads(20)
+        //{
+            //int id = omp_get_thread_num();
 
             //I("proc %d ", id);
-            while (chunk[id] < 75) {
-                wm_c = 0;
-                wm_f = id * 75 + chunk[id];
+            //while (chunk[id] < 15) {
+                //wm_c = 0;
+                //wm_f = id * 15 + chunk[id];
 
-                //mg.GetWatermarks(&wm_c, &wm_f);
-                I("watermarks:  chunk %u frame %u proc %d", wm_c, wm_f, id);
+                mg.GetWatermarks(&wm_c, &wm_f);
+                //I("watermarks:  chunk %u frame %u proc %d", wm_c, wm_f, id);
+                I("watermarks:  chunk %u frame %u", wm_c, wm_f);
                 rc = mg.RetrieveAFrame(&f);
 
                 cv::Mat frame;
@@ -336,8 +337,8 @@ int main (int argc, char *argv[])
                 memcpy(frame.data, imagedata, framesize);
 
                 //cout << frame << endl;
-                I("frame %d", wm_f);
-                bool plate_found = detectandshow(&alpr, frame, "", outputJson, id);
+                //I("frame %d", wm_f);
+                bool plate_found = detectandshow(&alpr, frame, "", outputJson);
 
                 if (!plate_found && !outputJson)
                     std::cout << "No license plates found." << std::endl;
@@ -348,11 +349,8 @@ int main (int argc, char *argv[])
                 xzl_bug_on(rc != 0);
                 //chunk[id] ++;
             }
-        }
-        //timespec endTime;
-        //getTimeMonotonic(&endTime);
-        //std::cout << "Total: " << diffclock(startTime, endTime) << "ms." << std::endl;
-    }
+        //}
+
 	/* XXX stop the stat collector */
 	stat_collector.stop();
 

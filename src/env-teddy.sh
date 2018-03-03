@@ -117,8 +117,8 @@ echo "script loaded"
 echo "ARCH=" ${ARCH}
 echo "available commands: pull and push"
 
-echo "add cuda lib to lib path"
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
+#echo "add cuda lib to lib path"
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
 
 #
 # make tmpfs using
