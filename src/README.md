@@ -1,4 +1,6 @@
 # to build
+sudo apt install libpostproc-dev
+
 using CMakefile. Check out the script
 env-xzl.sh
 And modify path as needed.
@@ -6,7 +8,6 @@ And modify path as needed.
 # 3rd party lib
 db - lmdb
 transport - zmq
-
 
 # WORKFLOW
 

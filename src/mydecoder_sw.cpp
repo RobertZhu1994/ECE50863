@@ -84,6 +84,7 @@ static int decode_write_sw(AVCodecContext *dec_ctx, AVFrame *frame, AVPacket *pk
 
 static uint8_t inbuf[INBUF_SIZE + AV_INPUT_BUFFER_PADDING_SIZE];
 
+/* xzl: obsoleted. can't do h264. see above */
 int decode_one_file_sw(const char *fname, zmq::socket_t &sender,
 											 chunk_desc const &cdesc /* chunk info */) {
 	const AVCodec *codec;
