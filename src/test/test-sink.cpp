@@ -70,6 +70,7 @@ const bool SAVE_LAST_VIDEO_STILL = false;
 const std::string LAST_VIDEO_STILL_LOCATION = "/tmp/laststill.jpg";
 const std::string WEBCAM_PREFIX = "/dev/video";
 //MotionDetector motiondetector;
+MotionDetector motiondetector[50];
 bool do_motiondetection = true;
 
 /** Function Headers */
@@ -105,12 +106,9 @@ void getAllStreamInfo() {
 
 }
 
-//bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson, int proc_id)
-bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson)
+bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson, int proc_id)
+//bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson)
 {
-
-    //MotionDetector motiondetector[20];
-    MotionDetector motiondetector;
     timespec startTime;
     //getTimeMonotonic(&startTime);
 
@@ -127,7 +125,7 @@ bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJso
 
     /* Motion detection phase */
     //cv::Rect rectan = motiondetector[proc_id].MotionDetect(&frame);
-    cv::Rect rectan = motiondetector.MotionDetect(&frame);
+    cv::Rect rectan = motiondetector[proc_id].MotionDetect(&frame);
     if (rectan.width>0) regionsOfInterest.push_back(AlprRegionOfInterest(rectan.x, rectan.y, rectan.width, rectan.height));
 
     timespec endTime;
@@ -144,7 +142,7 @@ bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJso
     getTimeMonotonic(&endTime);
     //double totalProcessingTime = diffclock(startTime, endTime);
 
-    std::cout << "Total Plate Recognition: " << diffclock(startTime, endTime) << "ms." << std::endl;
+    //std::cout << "Total Plate Recognition: " << diffclock(startTime, endTime) << "ms." << std::endl;
 
     /*
     if (measureProcessingTime) {
@@ -234,17 +232,25 @@ int main (int argc, char *argv[])
 	Frame f;
 	int rc;
 	seq_t wm_c, wm_f;
-	while (true) {
+    int chunk[50] = {0};
+
+    k2_measure("alpr begins");
+    #pragma omp parallel num_threads(50)
+    {
+        int id = omp_get_thread_num();
+	    //while (true)
+        while (chunk[id] < 6)
+        {
 
             /* teddyxu: alpr starts here */
             //std::vector<std::string> filenames;
             std::string configFile = "";
             bool outputJson = false;
-            int seektoms = 0;
-            bool detectRegion = false;
+            //int seektoms = 0;
+            //bool detectRegion = false;
             std::string country;
             int topn;
-            bool debug_mode = false;
+            //bool debug_mode = false;
 
             TCLAP::CmdLine cmd("OpenAlpr Command Line Utility", ' ', Alpr::getVersion());
 
@@ -289,11 +295,11 @@ int main (int argc, char *argv[])
                 //filenames = fileArg.getValue();
 
                 country = countryCodeArg.getValue();
-                seektoms = seekToMsArg.getValue();
+                //seektoms = seekToMsArg.getValue();
                 outputJson = jsonSwitch.getValue();
-                debug_mode = debugSwitch.getValue();
+                //debug_mode = debugSwitch.getValue();
                 configFile = configFileArg.getValue();
-                detectRegion = detectRegionSwitch.getValue();
+                //detectRegion = detectRegionSwitch.getValue();
                 templatePattern = templatePatternArg.getValue();
                 topn = topNArg.getValue();
                 measureProcessingTime = clockSwitch.getValue();
@@ -302,23 +308,18 @@ int main (int argc, char *argv[])
             catch (TCLAP::ArgException &e)    // catch any exceptions
             {
                 std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
-                return 1;
+                //return 1;
             }
 
-        //int chunk[20] = {0};
-
-        //#pragma omp parallel num_threads(20)
-        //{
-            //int id = omp_get_thread_num();
-
-            //I("proc %d ", id);
             //while (chunk[id] < 15) {
-                //wm_c = 0;
-                //wm_f = id * 15 + chunk[id];
+            mg.GetWatermarks(&wm_c, &wm_f);
 
-                mg.GetWatermarks(&wm_c, &wm_f);
-                //I("watermarks:  chunk %u frame %u proc %d", wm_c, wm_f, id);
-                I("watermarks:  chunk %u frame %u", wm_c, wm_f);
+                //wm_c = 0;
+                //wm_f = id * 6 + chunk[id];
+
+                I("watermarks:  chunk %u frame %u proc %d", wm_c, wm_f, id);
+                //I("watermarks:  chunk %u frame %u", wm_c, wm_f);
+
                 rc = mg.RetrieveAFrame(&f);
 
                 cv::Mat frame;
@@ -328,28 +329,30 @@ int main (int argc, char *argv[])
                 int framesize = 320 * 180;
                 char *imagedata = NULL;
 
-                imagedata = (char *) malloc(sizeof(char) * framesize);
-
+                //imagedata = (char *) malloc(sizeof(char) * framesize);
                 imagedata = static_cast<char *>(f.msg_p->data()), f.msg_p->size();
-
                 frame.create(180, 320, CV_8UC1);
-
                 memcpy(frame.data, imagedata, framesize);
 
                 //cout << frame << endl;
                 //I("frame %d", wm_f);
-                bool plate_found = detectandshow(&alpr, frame, "", outputJson);
+                bool plate_found = detectandshow(&alpr, frame, "", outputJson, id);
 
                 if (!plate_found && !outputJson)
                     std::cout << "No license plates found." << std::endl;
 
-
                 //if (rc == VS_ERR_EOF_CHUNKS)
-                //break;
+                    //break;
                 xzl_bug_on(rc != 0);
-                chunk[id] ++;
-            }
-        //}
+
+                chunk[id]++;
+            //}
+        }
+        //k2_measure("alpr ends");
+        //k2_measure_flush();
+    }
+    k2_measure("alpr ends");
+    k2_measure_flush();
 
 	/* XXX stop the stat collector */
 	stat_collector.stop();
