@@ -133,13 +133,16 @@ void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int typ
 	unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
 //	unsigned cnt = send_multi_from_db(env, dbi, 0, 1000 * 1000, sender, temp_desc);
 
+
 	/* -- wait for all outstanding? -- */
 	sleep (10);
 
 	EE("total %u loaded & sent", cnt);
+    //cout << "here?" <<endl;
 
 	mdb_dbi_close(env, dbi);
 	mdb_env_close(env);
+    //cout << "here?" <<endl;
 }
 
 
@@ -218,13 +221,17 @@ int main (int argc, char *argv[])
 	zmq::socket_t fb_recv(context, ZMQ_PULL);
 	fb_recv.bind(FB_PULL_ADDR);
 
-	I("bound to %s (fb %s). wait for workers to pull ...",
-		CHUNK_PUSH_ADDR, FB_PULL_ADDR);
+	I("bound to %s (fb %s). wait for workers to pull ...", CHUNK_PUSH_ADDR, FB_PULL_ADDR);
 
 	zmq::socket_t s_frame(context, ZMQ_PUSH);
 	s_frame.connect(WORKER_PUSH_TO_ADDR);  /* push raw frames */
 
 	I("connect to %s. ready to push raw frames", WORKER_PUSH_TO_ADDR);
+
+    zmq::socket_t frame_request(context, ZMQ_PULL);
+    frame_request.connect(WORKER_REQUEST);  /* pull query requests */
+
+    I("connect to %s. ready to get new requests", WORKER_REQUEST);
 
 //	pthread_t si_server;
 //	int rc = pthread_create(&si_server, NULL, serv_stream_info, NULL);
@@ -255,6 +262,7 @@ int main (int argc, char *argv[])
 
 //	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
 	test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
+    //test_send_multi_from_db(DB_RAW_FRAME_PATH_720, s_frame, TYPE_RAW_FRAME);
 
 //	rc = pthread_join(si_server, nullptr); /* will never join.... XXX */
 //	xzl_bug_on(rc != 0);

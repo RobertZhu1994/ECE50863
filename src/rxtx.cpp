@@ -458,7 +458,6 @@ shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, data_desc *fdesc
     //cout << "rc = " << rc << endl;
     //if(rc == 0)
     /*
-    cout << "here " << endl;
 
     int more = 0;
 

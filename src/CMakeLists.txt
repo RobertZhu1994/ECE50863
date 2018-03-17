@@ -22,6 +22,8 @@ SET(CMAKE_CXX_FLAGS_RELEASE "-std=c++11 -g -Wall -O3 -DHAVE_NUMA")
 
 SET(CMAKE_C_FLAGS_DEBUG
 		"${CMAKE_C_FLAGS_DEBUG} -std=gnu11 -g -O0 -Wall -Wfatal-errors")
+SET(CMAKE_C_FLAGS_RELEASE
+		"${CMAKE_C_FLAGS_RELEASE} -std=gnu11 -g -O3 -Wall -Wfatal-errors")
 
 set(deploy_target_path "localhost:/tmp/$ENV{USER}")
 
@@ -35,15 +37,17 @@ include_directories(
         ./
         /shared/ffmpeg/include
         /shared/libzmq/include
-        /usr/local/include
-		#/usr/include/opencv2
+        #/usr/local/include
+		#/home/teddyxu/opencvlib/include
+		/usr/include/opencv2
 )
 
 link_directories(
         /shared/ffmpeg/lib
         /shared/libzmq/lib
-		/usr/local/lib
-		#/usr/lib
+		#/usr/local/lib
+		#/home/teddyxu/opencvlib/lib
+		/usr/lib
 )
 
 
@@ -126,6 +130,11 @@ if (OPENMP_FOUND)
 	set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
+#ADD_LIBRARY(gompdebug STATIC IMPORTED)
+#SET_TARGET_PROPERTIES(gompdebug PROPERTIES IMPORTED_LOCATION /usr/lib/debug/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0)
+
+#ADD_LIBRARY(myomp STATIC IMPORTED)
+#SET_TARGET_PROPERTIES(myomp PROPERTIES IMPORTED_LOCATION /usr/lib/x86_64-linux-gnu/libgomp.so.1)
 ###########################
 
 #SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/library")
@@ -144,6 +153,21 @@ SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/lib")
 #		COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/include/xplane_lib.h ${deploy_include_path}
 #		COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/include/xplane/* ${deploy_include_path}/xplane/
 #		)
+#ADD_LIBRARY(opencv_core24 STATIC IMPORTED)
+#SET_TARGET_PROPERTIES(opencv_core24 PROPERTIES IMPORTED_LOCATION /home/teddyxu/opencvlib/lib/libopencv_core.so)
+#SET (COMMON_LIB ${COMMON_LIB} opencv_core)
+
+#ADD_LIBRARY(opencv_highgui24 STATIC IMPORTED)
+#SET_TARGET_PROPERTIES(opencv_highgui24 PROPERTIES IMPORTED_LOCATION /home/teddyxu/opencvlib/lib/libopencv_highgui.so)
+#SET (COMMON_LIB ${COMMON_LIB} opencv_highgui)
+
+#ADD_LIBRARY(opencv_imgproc24 STATIC IMPORTED)
+#SET_TARGET_PROPERTIES(opencv_imgproc24 PROPERTIES IMPORTED_LOCATION /home/teddyxu/opencvlib/lib/libopencv_imgproc.so)
+#SET (COMMON_LIB ${COMMON_LIB} opencv_imgproc)
+
+#ADD_LIBRARY(myopenalpr STATIC IMPORTED)
+#SET_TARGET_PROPERTIES(myopenalpr PROPERTIES IMPORTED_LOCATION /home/teddyxu/openalprlib/lib/libopenalpr.so)
+#SET (COMMON_LIB ${COMMON_LIB} opencv_imgproc)
 
 ########################################
 # Test
@@ -198,11 +222,10 @@ TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         ${COMMON_LIBS}
         lmdb
         zmq
+		openalpr
 		opencv_core
 		opencv_highgui
 		opencv_imgproc
-		openalpr
-		#fopenmp
         )
 add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
         COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
@@ -300,15 +323,15 @@ add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
 ########################################
 SET(PROGRAM test-db-build)
 add_executable(${PROGRAM}.bin
-        test/${PROGRAM}.cpp
-        )
+		test/${PROGRAM}.cpp
+		)
 TARGET_LINK_LIBRARIES(${PROGRAM}.bin
-        vstreamer
-        ${FFMPEG_LIBS}
-        ${COMMON_LIBS}
-        lmdb
-        )
+		vstreamer
+		${FFMPEG_LIBS}
+		${COMMON_LIBS}
+		lmdb
+		)
 add_custom_command(TARGET ${PROGRAM}.bin POST_BUILD
-        COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
-        )
+		COMMAND scp ${PROGRAM}.bin ${deploy_target_path}/${CMAKE_BUILD_TYPE}/
+		)
 ########################################

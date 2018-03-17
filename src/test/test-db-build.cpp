@@ -157,8 +157,10 @@ void build_chunk_db(void)
 /* config */
 #define LMDB_RAWFRAME_PATH "/shared/videos/lmdb-rf/"
 #define DB_NAME_RAW_FRAMES "raw_frames"
+
 //char input_raw_video[] = "/shared/videos/raw-320x240-yuv420p.yuv";
-char input_raw_video[] = "/shared/videos/clip2.yuv";
+//char input_raw_video[] = "/shared/videos/miami40min.yuv";
+char input_raw_video[] = "/shared/videos/miami40min1280x720.yuv";
 //static int height = 320;
 //static int width = 240;
 static int height = 180;
@@ -205,14 +207,20 @@ void build_raw_frame_db(const char *fname)
 	rc = mdb_env_create(&env);
 	xzl_bug_on(rc != 0);
 
-	rc = mdb_env_set_mapsize(env, 1UL * 1024UL * 1024UL * 1024UL); /* 1 GiB */
+	rc = mdb_env_set_mapsize(env, 1UL * 1024UL * 1024UL * 1024UL * 1024UL); /* 1 GiB */
 	xzl_bug_on(rc != 0);
 
 	rc = mdb_env_set_maxdbs(env, 1); /* required for named db */
 	xzl_bug_on(rc != 0);
 
-	EE("going to open db path %s", DB_RAW_FRAME_PATH);
-	rc = mdb_env_open(env, DB_RAW_FRAME_PATH, 0, 0664);
+    /* build lmdb to the path */
+	//EE("going to open db path %s", DB_RAW_FRAME_PATH);
+	//rc = mdb_env_open(env, DB_RAW_FRAME_PATH, 0, 0664);
+    //xzl_bug_on(rc != 0);
+
+    /* build lmdb to the path */
+    EE("going to open db path %s", DB_RAW_FRAME_PATH_720);
+    rc = mdb_env_open(env, DB_RAW_FRAME_PATH_720, 0, 0664);
 	xzl_bug_on(rc != 0);
 
 	rc = mdb_txn_begin(env, NULL, 0, &txn);
