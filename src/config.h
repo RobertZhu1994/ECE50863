@@ -24,7 +24,7 @@
 #define FRAME_PULL_ADDR 						"tcp://*:5557"
 #define CHUNK_PUSH_ADDR 						"tcp://*:5558"
 #define FB_PULL_ADDR 								"tcp://*:5559"
-#define REQUEST 								"tcp://*:5560"
+#define REQUEST_PULL_ADDR 								"tcp://*:5560"
 #define STREAMINFO_PUSH_ADDR 				"tcp://*:5561"
 #define REQUEST720 								"tcp://*:5562"
 

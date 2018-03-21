@@ -160,11 +160,10 @@ void build_chunk_db(void)
 
 //char input_raw_video[] = "/shared/videos/raw-320x240-yuv420p.yuv";
 //char input_raw_video[] = "/shared/videos/miami40min.yuv";
-char input_raw_video[] = "/shared/videos/alpr320x180.yuv";
-//static int height = 320;
-//static int width = 240;
-static int height = 180;
-static int width = 320;
+char input_raw_video[] = "/shared/videos/alpr1280x720.yuv";
+
+static int height = 720;
+static int width = 1280;
 static int yuv_mode = 420;
 static int fps = 30;
 
@@ -219,8 +218,8 @@ void build_raw_frame_db(const char *fname)
     //xzl_bug_on(rc != 0);
 
     /* build lmdb to the path */
-    EE("going to open db path %s", DB_RAW_FRAME_PATH);
-    rc = mdb_env_open(env, DB_RAW_FRAME_PATH, 0, 0664);
+    EE("going to open db path %s", DB_RAW_FRAME_PATH_720);
+    rc = mdb_env_open(env, DB_RAW_FRAME_PATH_720, 0, 0664);
 	xzl_bug_on(rc != 0);
 
 	rc = mdb_txn_begin(env, NULL, 0, &txn);

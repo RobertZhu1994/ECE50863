@@ -26,10 +26,13 @@ int send_one_frame_mmap(uint8_t *buffer, size_t sz, zmq::socket_t &sender,
 
 int send_one_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 													 vs::data_desc const & cdesc, my_alloc_hint * hint);
+int send_one_720_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
+					 vs::data_desc const & cdesc, my_alloc_hint * hint);
 
 unsigned recv_one_frame(zmq::socket_t & recv, size_t* sz = nullptr, vs::data_desc *fdesc = nullptr);
 
 std::shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, vs::data_desc *fdesc);
+std::shared_ptr<zmq::message_t> recv_one_frame_720(zmq::socket_t & recv);
 
 void send_chunk_eof(vs::cid_t const & cid, unsigned int chunk_seq, zmq::socket_t & sender);
 void send_raw_eof(vs::cid_t const & cid, unsigned int chunk_seq, unsigned int frame_seq, zmq::socket_t & sender);

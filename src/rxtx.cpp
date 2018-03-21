@@ -121,8 +121,6 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 
 		cid_t id = *(cid_t *)key.mv_data;
 
-		//I("%lu %lu", start.as_uint, end.as_uint);
-
         if (id.as_uint < start.as_uint)
             continue;
 
@@ -149,8 +147,13 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 		}
 
 		/* XXX more. check desc.type and fill in the rest of the desc... */
-		send_one_from_db((uint8_t *)data.mv_data, data.mv_size, s, desc, hint);
-		cnt ++;
+        if (start.as_uint + 1 == end.as_uint){
+            send_one_720_from_db((uint8_t *) data.mv_data, data.mv_size, s, desc, hint);
+        }
+        else {
+            send_one_from_db((uint8_t *) data.mv_data, data.mv_size, s, desc, hint);
+        }
+        cnt ++;
 	}
 
 	if(start.as_uint == end.as_uint - 1){
@@ -334,16 +337,46 @@ int send_one_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 	sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
 
 	VV("desc sent");
+    I("send_one_from_db");
 
 	/* send the chunk */
-	zmq::message_t cmsg(buffer, sz,
-											my_free /* our deallocation func */, (void *) hint);
+	zmq::message_t cmsg(buffer, sz, my_free /* our deallocation func */, (void *) hint);
 	auto ret = sender.send(cmsg, 0); /* no more msg */
 	xzl_bug_on(!ret);
 
 	VV("frame sent");
 
 	return 0;
+}
+
+int send_one_720_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
+                     data_desc const & desc, my_alloc_hint * hint) {
+    xzl_bug_on(!buffer || !hint);
+
+    /* send frame desc */
+    ostringstream oss;
+    boost::archive::text_oarchive oa(oss);
+
+    oa << desc;
+    string s = oss.str();
+
+    /* desc msg. explicit copy content over */
+    zmq::message_t dmsg(s.size());
+    memcpy(dmsg.data(), s.c_str(), s.size());
+    //zmq::message_t dmsg(s.begin(), s.end());
+    //sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
+
+    VV("desc sent");
+    I("send_one_from_db");
+
+    /* send the chunk */
+    zmq::message_t cmsg(buffer, sz, my_free /* our deallocation func */, (void *) hint);
+    auto ret = sender.send(cmsg, 0); /* no more msg */
+    xzl_bug_on(!ret);
+
+    VV("frame sent");
+
+    return 0;
 }
 
 /* send the final desc with no frame, marking the end of a frame seq (e.g. a chunk?) */
@@ -497,6 +530,32 @@ shared_ptr<zmq::message_t> recv_one_frame(zmq::socket_t & recv, data_desc *fdesc
 		*fdesc = desc;
 
 	return cmsg;
+}
+
+/* return a shared_ptr of the frame, which can be free'd later.
+ * 	return nullptr if only desc but no frame is recv'd.
+ * */
+shared_ptr<zmq::message_t> recv_one_frame_720(zmq::socket_t & recv) {
+
+    I("start to rx msgs...");
+
+    data_desc desc;
+    zmq::message_t dmsg;
+
+    shared_ptr<zmq::message_t> cmsg = nullptr;
+
+    cmsg = make_shared<zmq::message_t>();
+    xzl_bug_on(!cmsg);
+
+    auto ret = recv.recv(cmsg.get());
+
+    xzl_bug_on(!ret); /* EAGAIN? */
+    I("got chunk msg. size =%lu", cmsg->size());
+
+    //if (fdesc)
+    //    *fdesc = desc;
+
+    return cmsg;
 }
 
 /* recv a desc msg and a chunk msg.

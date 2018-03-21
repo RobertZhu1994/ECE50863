@@ -198,10 +198,6 @@ bool recognizeplate( Alpr* alpr, cv::Mat frame_720, std::string region, bool wri
     return results.plates.size() > 0;
 }
 
-void send_request(int db_seq, int total_fnum, zmq::socket_t &sender){
-
-}
-
 int main (int argc, char *argv[])
 {
 	zmq::context_t context (1 /* # io threads */);
@@ -210,16 +206,13 @@ int main (int argc, char *argv[])
 //	receiver.connect(CLIENT_PULL_FROM_ADDR);
 	receiver.bind(FRAME_PULL_ADDR);
 
-    zmq::socket_t rq_sender(context, ZMQ_PUSH);
-    rq_sender.bind(REQUEST);
+    zmq::socket_t q_request(context, ZMQ_REQ);
+    q_request.connect(WORKER_REQUEST);
 
     EE("bound to %s. wait for workers to push ...", FRAME_PULL_ADDR);
 
 	CallBackTimer stat_collector;
 	RxManager mg;
-
-    zmq::socket_t rq720_sender(context, ZMQ_PUSH);
-    rq720_sender.bind(REQUEST720);
 
 	//stat_collector.start(200 /*ms, check interval */, &getStatistics);
 
@@ -318,7 +311,6 @@ int main (int argc, char *argv[])
     while(1){
         Frame f;
         Frame frame[72005];
-        Frame ff[64];
 
         request_desc rd;
         zmq::message_t rq_desc(sizeof(request_desc));
@@ -326,28 +318,26 @@ int main (int argc, char *argv[])
         if (cont_flag == 1)
             break;
 
-        EE("bound to %s. Enter your target database: (1-n)", REQUEST);
+        EE("connect to %s. Enter your target database: (1-n)", WORKER_REQUEST);
         cin >> rd.db_seq;
 
-        EE("bound to %s. Enter start frame number: ", REQUEST);
+        EE("connect to %s. Enter start frame number: ", WORKER_REQUEST);
         cin >> rd.start_fnum;
 
-        EE("bound to %s. Enter total frame numbers: ", REQUEST);
+        EE("connect to %s. Enter total frame numbers: ", WORKER_REQUEST);
         cin >> rd.total_fnum;
 
         /* Sending requests */
         memcpy(rq_desc.data(), &rd, sizeof(request_desc));
-        rq_sender.send(rq_desc, ZMQ_PUSH);
+        q_request.send(rq_desc);
 
         I("Request sent, db: %d, frames: %d", rd.db_seq, rd.total_fnum);
 
-        I("Doing this again???????????????");
-
         /* Receiving frames */
         for(int iter = 0; iter < rd.total_fnum; iter++) {
-        //while(1){
             data_desc desc;
             auto msg_ptr = recv_one_frame(receiver, &desc);
+            //auto msg_ptr = recv_one_frame(q_request, &desc);
 
             if (!msg_ptr) {
                 mg.DepositADesc(desc);
@@ -380,23 +370,40 @@ int main (int argc, char *argv[])
         }
         k2_measure("retrieve ends");
 
+        zmq::message_t reply(5);
+        q_request.recv(&reply);
+
         //Frame frame_720p[72000];
         int height_720 = 720;
         int width_720 = 1280;
         int framesize_720 = height_720 * width_720;
 
-        omp_lock_t writelock;
-        omp_init_lock(&writelock);
+        //omp_lock_t writelock;
+        //omp_init_lock(&writelock);
 
         /* Processing Frames*/
         k2_measure("alpr begins");
 
-        //#pragma omp parallel
+/*
+        zmq::socket_t *worker_get[30];
+        for(int worker_count = 0; worker_count < 30; worker_count++){
+            worker_get[worker_count]= new zmq::socket_t(context, ZMQ_REQ);
+            worker_get[worker_count]->connect(WORKER_REQUEST);
+        }
+*/
+        zmq::socket_t *worker_socket[30];
+        for(int worker_count = 0; worker_count < 30; worker_count++){
+            worker_socket[worker_count]= new zmq::socket_t(context, ZMQ_REQ);
+            worker_socket[worker_count]->connect(WORKER_REQUEST);
+        }
+
+        Frame fp[64];
+
         #pragma omp parallel for schedule(dynamic, 100) num_threads(30)
         for (int j = rd.start_fnum; j < rd.start_fnum + rd.total_fnum; j++) {
             int id = omp_get_thread_num();
             cv::Mat frm;
-            char *imagedata = NULL;
+            char *imagedata = nullptr;
 
             //char *imagedata = (char *) malloc(sizeof(char) * framesize);
             imagedata = static_cast<char *>(frame[j].msg_p->data()), frame[j].msg_p->size();
@@ -408,7 +415,7 @@ int main (int argc, char *argv[])
             //bool plate_found = detectandshow(&alpr, frm, "", outputJson, id);
             std::vector<AlprRegionOfInterest> regionsOfInterest = detectmotion(alpr[id], frm, "", outputJson, id, j);
 
-            sleep(1);
+            //sleep(5);
             //omp_set_lock(&writelock);
 
             zmq::message_t rq_desc720(sizeof(request_desc));
@@ -418,29 +425,29 @@ int main (int argc, char *argv[])
                 //zmq::message_t rq_desc720(sizeof(request_desc));
                 //request_desc rd_one_frame;
 
-                EE("bound to %s. ready to push 720 requests", REQUEST720);
-
                 //Specify the frame wants to retrieve
-                rd_one_frame.start_fnum = j;
                 rd_one_frame.db_seq = HDD_RAW_720;
+                rd_one_frame.start_fnum = j;
                 rd_one_frame.total_fnum = 1;
 
                 cv::Mat frm_720;
                 Frame f720;
 
-                omp_set_lock(&writelock);
+                //omp_set_lock(&writelock);
 
                 memcpy(rq_desc720.data(), &rd_one_frame, sizeof(request_desc));
-                rq720_sender.send(rq_desc720, ZMQ_PUSH);
+                worker_socket[id]->send(rq_desc720);
 
                 I("Request sent, db: %d, frame: %d", rd_one_frame.db_seq, rd_one_frame.start_fnum);
 
+                //zmq::message_t reply(5);
+                //worker_get[id]->recv(&reply);
+/*
                 for(int dc = 0; dc < 1; dc++) {
                     I("start to get 720p frames");
                     data_desc desc720;
-                    auto msg_ptr = recv_one_frame(receiver, &desc720);
-                    //I("msg_ptr = %lu", msg_ptr);
-                    //cout << desc.c_seq << endl;
+                    auto msg_ptr = recv_one_frame_720(*worker_socket[id], &desc720);
+                    //auto msg_ptr = recv_one_frame(receiver, &desc720);
                     if (!msg_ptr) {
                         mg.DepositADesc(desc720);
                         I("got desc: %s", desc720.to_string().c_str());
@@ -450,35 +457,31 @@ int main (int argc, char *argv[])
                         mg.DepositAFrame(desc720, msg_ptr);
                     }
                 }
-/*
-                mg.GetWatermarks(&wm_c, &wm_f);
-                I("watermarks:  chunk %u frame %u", wm_c, wm_f);
-                mg.RetrieveAFrame(&f);
-                //mg.RetrieveAFrame(&f);
-*/
+
                 for(int i = rd_one_frame.start_fnum; i < rd_one_frame.start_fnum + rd_one_frame.total_fnum; i++) {
                     mg.GetWatermarks(&wm_c, &wm_f);
 
                     I("watermarks:  chunk %u frame %u", wm_c, wm_f);
-                    rc = mg.RetrieveAFrame(&f);
+                    rc = mg.RetrieveAFrame(&fp[id]);
 
-                    ff[id] = f;
-
-                    //memcpy(frame[i], &f, sizeof(shared_ptr));
-                    if (rc == VS_ERR_EOF_CHUNKS)
+                    if (rc == VS_ERR_EOF_CHUNKS) {
                         break;
-
+                    }
                     //xzl_bug_on(rc != 0);
                 }
-
+*/
+                auto msg_ptr = recv_one_frame_720(*worker_socket[id]);
                 char *imagedata_720 = NULL;
-                //imagedata_720 = static_cast<char *>(ff[id].msg_p->data()), ff[id].msg_p->size();
-                imagedata_720 = (char*)(ff[id].msg_p->data()), ff[id].msg_p->size();
+
+                //imagedata_720 = (char *) malloc (sizeof(char) * framesize);
+                //imagedata_720 = static_cast<char *>(fp[id].msg_p->data()), fp[id].msg_p->size();
+                I("%lu", msg_ptr->size());
+                imagedata_720 = (char*)(msg_ptr->data()), msg_ptr->size();
 
                 frm_720.create(height_720, width_720, CV_8UC1);
                 memcpy(frm_720.data, imagedata_720, framesize_720);
 
-                omp_unset_lock(&writelock);
+                //omp_unset_lock(&writelock);
 
                 getTimeMonotonic(&startTime);
                 bool plate_found = recognizeplate(alpr[id], frm_720, "", outputJson, id, j, regionsOfInterest);
@@ -491,7 +494,7 @@ int main (int argc, char *argv[])
             }
             //omp_unset_lock(&writelock);
         }
-        omp_destroy_lock(&writelock);
+        //omp_destroy_lock(&writelock);
         k2_measure("alpr ends");
         k2_measure_flush();
         cout << "count = " << mycount << endl;
