@@ -244,6 +244,12 @@ namespace vs {
 		}
 	};
 
+	struct request_desc{
+		int db_seq;
+		int start_fnum;
+		int total_fnum;
+	};
+
 } // namespace vs
 
 /* return values */

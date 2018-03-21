@@ -113,12 +113,18 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 
 	/* once we start to send, the refcnt can be dec by the async sender,
 	 * which means it can go neg. */
+
 	while (1) {
 		rc = mdb_cursor_get(cursor, &key, &data, MDB_NEXT);
 		if (rc == MDB_NOTFOUND)
 			break;
 
 		cid_t id = *(cid_t *)key.mv_data;
+
+		//I("%lu %lu", start.as_uint, end.as_uint);
+
+        if (id.as_uint < start.as_uint)
+            continue;
 
 		if (id.as_uint >= end.as_uint)
 			break;
@@ -145,6 +151,10 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 		/* XXX more. check desc.type and fill in the rest of the desc... */
 		send_one_from_db((uint8_t *)data.mv_data, data.mv_size, s, desc, hint);
 		cnt ++;
+	}
+
+	if(start.as_uint == end.as_uint - 1){
+		return cnt;
 	}
 
 	/* send the eof -- depending whether we are sending frames or chunks */

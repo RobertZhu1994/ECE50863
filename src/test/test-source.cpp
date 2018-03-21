@@ -100,7 +100,8 @@ void send_chunk_from_file(const char *fname, zmq::socket_t & sender)
  * this can be used for sending either encoded chunks or raw frames.
  *
  */
-void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int type)
+void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int type, int f_start, int f_end)
+//void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int type)
 {
 	int rc;
 	MDB_env *env;
@@ -130,19 +131,60 @@ void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int typ
 
 //	data_desc temp_desc(type);
 
-	unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
+	//unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
+    unsigned cnt = send_multi_from_db(env, dbi, f_start, f_end, sender, temp_desc);
 //	unsigned cnt = send_multi_from_db(env, dbi, 0, 1000 * 1000, sender, temp_desc);
 
 
 	/* -- wait for all outstanding? -- */
-	sleep (10);
+	sleep (1);
 
 	EE("total %u loaded & sent", cnt);
-    //cout << "here?" <<endl;
 
 	mdb_dbi_close(env, dbi);
 	mdb_env_close(env);
-    //cout << "here?" <<endl;
+}
+
+void test_send_one_from_db(const char *dbpath, zmq::socket_t & sender, int type, int f_seq)
+{
+	int rc;
+	MDB_env *env;
+	MDB_dbi dbi;
+	MDB_txn *txn;
+
+	rc = mdb_env_create(&env);
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_env_set_mapsize(env, 1UL * 1024UL * 1024UL * 1024UL); /* 1 GiB */
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_env_open(env, dbpath, 0, 0664);
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_dbi_open(txn, NULL, MDB_INTEGERKEY, &dbi);
+	xzl_bug_on(rc != 0);
+
+	mdb_txn_commit(txn); /* done open the db */
+
+	data_desc temp_desc(type);
+	temp_desc.cid.stream_id = 1001;
+	temp_desc.c_seq = 1;
+
+//	data_desc temp_desc(type);
+
+	unsigned cnt = send_multi_from_db(env, dbi, f_seq, f_seq+1, sender, temp_desc);
+
+
+	/* -- wait for all outstanding? -- */
+	sleep (1);
+
+	EE("frame %u loaded & sent from db %s", f_seq, dbpath);
+
+	mdb_dbi_close(env, dbi);
+	mdb_env_close(env);
 }
 
 
@@ -221,26 +263,21 @@ int main (int argc, char *argv[])
 	zmq::socket_t fb_recv(context, ZMQ_PULL);
 	fb_recv.bind(FB_PULL_ADDR);
 
-	I("bound to %s (fb %s). wait for workers to pull ...", CHUNK_PUSH_ADDR, FB_PULL_ADDR);
+	//I("bound to %s (fb %s). wait for workers to pull ...", CHUNK_PUSH_ADDR, FB_PULL_ADDR);
 
 	zmq::socket_t s_frame(context, ZMQ_PUSH);
 	s_frame.connect(WORKER_PUSH_TO_ADDR);  /* push raw frames */
 
-	I("connect to %s. ready to push raw frames", WORKER_PUSH_TO_ADDR);
+	//I("connect to %s. ready to push raw frames", WORKER_PUSH_TO_ADDR);
 
     zmq::socket_t frame_request(context, ZMQ_PULL);
     frame_request.connect(WORKER_REQUEST);  /* pull query requests */
 
-    I("connect to %s. ready to get new requests", WORKER_REQUEST);
+    //I("connect to %s. ready to get new requests", WORKER_REQUEST);
 
 //	pthread_t si_server;
 //	int rc = pthread_create(&si_server, NULL, serv_stream_info, NULL);
 //	xzl_bug_on(rc != 0);
-
-	printf ("Press Enter when the workers are ready: ");
-	getchar ();
-	printf ("Sending tasks to workers…\n");
-
 #if 0
 	for (int i = 0; i < 20; i++) {
 
@@ -259,13 +296,88 @@ int main (int argc, char *argv[])
 #endif
 
 //	test_send_raw_frames_from_file(argv[1], s_frame);
+    zmq::message_t rq_desc(sizeof(request_desc));
+    request_desc *rd;
 
-//	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
-	test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
-    //test_send_multi_from_db(DB_RAW_FRAME_PATH_720, s_frame, TYPE_RAW_FRAME);
+    frame_request.recv(&rq_desc);
+    rd = (request_desc *)(rq_desc.data()), rq_desc.size();
+    I("got desc msg. db_seq =%lu. start =%lu frame_num=%lu\n", rd->db_seq, rd->start_fnum, rd->total_fnum);
 
-//	rc = pthread_join(si_server, nullptr); /* will never join.... XXX */
-//	xzl_bug_on(rc != 0);
+    test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum, 2 * rd->start_fnum + 2*rd->total_fnum);
+	zmq_close(&rq_desc);
+
+	zmq::socket_t frame720_request(context, ZMQ_PULL);
+	frame720_request.connect(WORKER720_REQUEST);  /* pull query requests */
+
+	while(1){
+
+		I("connect to %s. ready to get new 720p requests", WORKER720_REQUEST);
+
+		//zmq::message_t rq720_desc(sizeof(request_desc));
+		//memcpy(rq720_desc.data(), &rq720_desc, sizeof(request_desc));
+		zmq::message_t rq720_desc;
+		request_desc *rd720;
+
+		auto rc = frame720_request.recv(&rq720_desc);
+		rd720 = (request_desc *)(rq720_desc.data()), rq720_desc.size();
+
+		I("rc=%lu",rc);
+		I("got desc msg. db_seq =%lu. start =%lu frame_num=%lu\n", rd720->db_seq, rd720->start_fnum, rd720->total_fnum);
+
+		test_send_one_from_db(DB_RAW_FRAME_PATH_720, s_frame, TYPE_RAW_FRAME, 2 * rd720->start_fnum);
+	}
+
+/*
+	while(1){
+        zmq::message_t desc_720(sizeof(request_desc));
+        request_desc *rd_720;
+        request_desc *rd_old_720;
+
+        I("connect to %s. ready to get new requests", WORKER_REQUEST);
+
+		frame_request.recv(&desc_720);
+
+//		rd_720 = (request_desc *)(desc_720.data()), desc_720.size();
+
+//        if(rd->start_fnum == rd_old_720->start_fnum){
+//            I("continue");
+//            continue;
+//        }
+
+//        rd_old_720 = (request_desc *)(desc_720.data()), desc_720.size();
+
+        I("got desc msg. db_seq =%lu. start =%lu frame_num=%lu\n", rd_720->db_seq, rd_720->start_fnum, rd_720->total_fnum);
+
+        if(rd_720->total_fnum > 0) {
+            I("connect to %s. ready to push raw frames", WORKER_PUSH_TO_ADDR);
+            printf("Sending tasks to workers…\n");
+
+            switch (rd_720->db_seq) {
+                case HDD_RAW_180:
+                    I("I am here");
+                    //	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
+                    test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum, 2 * rd->start_fnum + 2*rd->total_fnum);
+                    //test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
+                    rd_720->db_seq = -1;
+                    rd_720->total_fnum = -1;
+                    //zmq_close(&rq_desc);
+                    break;
+                case HDD_RAW_720:
+                    //	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
+                    I("here");
+                    test_send_multi_from_db(DB_RAW_FRAME_PATH_720, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum, 2 * rd->start_fnum + 2*rd->total_fnum);
+                    rd_720->db_seq = -1;
+                    rd_720->total_fnum = -1;
+                    //zmq_close(&rq_desc);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+*/
+	//	rc = pthread_join(si_server, nullptr); /* will never join.... XXX */
+	//	xzl_bug_on(rc != 0);
 
 	return 0;
 }

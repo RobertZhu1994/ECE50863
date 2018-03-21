@@ -108,17 +108,17 @@ void getAllStreamInfo() {
 
 atomic<int> mycount(0);
 
-bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson, int proc_id, int wm_c, int wm_f)
+std::vector<AlprRegionOfInterest> detectmotion( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson, int proc_id, int f_seq)
 //bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJson)
 {
     timespec startTime;
     timespec endTime;
 
-    mycount ++;
+    mycount++;
 
     std::vector<AlprRegionOfInterest> regionsOfInterest;
 
-    int ratio = 720/180;
+    int ratio = 720 / 180;
 
     /*
     if (do_motiondetection)
@@ -132,21 +132,28 @@ bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJso
 
     /* Motion detection phase */
     cv::Rect rectan = motiondetector[proc_id].MotionDetect(&frame);
-    if (rectan.width>0){
-        regionsOfInterest.push_back(AlprRegionOfInterest(rectan.x, rectan.y, rectan.width, rectan.height));
-        //regionsOfInterest.push_back(AlprRegionOfInterest(ratio*rectan.x, ratio*rectan.y, ratio*rectan.width, ratio*rectan.height));
+    if (rectan.width > 0) {
+        //cout << "here" << endl;
+        //regionsOfInterest.push_back(AlprRegionOfInterest(rectan.x, rectan.y, rectan.width, rectan.height));
+        regionsOfInterest.push_back(AlprRegionOfInterest(ratio*rectan.x, ratio*rectan.y, ratio*rectan.width, ratio*rectan.height));
     }
 
-    //cout << ratio*rectan.x << " " <<  ratio*rectan.y << " " << ratio*rectan.width << " " << ratio*rectan.height << " " << endl;
+    //cout << rectan.x << " " << rectan.y << " " << rectan.width << " " << rectan.height << " " << endl;
     //std::cout << "Motion Detection: " << diffclock(startTime, endTime) << "ms." << std::endl;
+
+    return regionsOfInterest;
+}
+
+bool recognizeplate( Alpr* alpr, cv::Mat frame_720, std::string region, bool writeJson, int proc_id, int f_seq, std::vector<AlprRegionOfInterest> regionsOfInterest){
+
+    AlprResults results;
 
     /* Recognition phase */
     //getTimeMonotonic(&startTime);
-    AlprResults results;
+    results = alpr->recognize(frame_720.data, frame_720.elemSize(), frame_720.cols, frame_720.rows, regionsOfInterest);
 
-    if (regionsOfInterest.size()>0) {
-        results = alpr->recognize(frame.data, frame.elemSize(), frame.cols, frame.rows, regionsOfInterest);
-    }
+    /* print the ROI */
+    cout << regionsOfInterest[0].x << " " << regionsOfInterest[0].y << " " << regionsOfInterest[0].width << " " << regionsOfInterest[0].height << " " << endl;
 
     //getTimeMonotonic(&endTime);
     //std::cout << "Total Plate Recognition: " << diffclock(startTime, endTime) << "ms." << std::endl;
@@ -191,6 +198,10 @@ bool detectandshow( Alpr* alpr, cv::Mat frame, std::string region, bool writeJso
     return results.plates.size() > 0;
 }
 
+void send_request(int db_seq, int total_fnum, zmq::socket_t &sender){
+
+}
+
 int main (int argc, char *argv[])
 {
 	zmq::context_t context (1 /* # io threads */);
@@ -202,38 +213,18 @@ int main (int argc, char *argv[])
     zmq::socket_t rq_sender(context, ZMQ_PUSH);
     rq_sender.bind(REQUEST);
 
-    //EE("bound to %s. asking for frame range", FRAME_PULL_ADDR);
     EE("bound to %s. wait for workers to push ...", FRAME_PULL_ADDR);
 
 	CallBackTimer stat_collector;
 	RxManager mg;
 
+    zmq::socket_t rq720_sender(context, ZMQ_PUSH);
+    rq720_sender.bind(REQUEST720);
+
 	//stat_collector.start(200 /*ms, check interval */, &getStatistics);
 
-//	size_t sz = 1;
-/*
-    while (1) {
-        data_desc desc;
-        auto msg_ptr = recv_one_frame(receiver, &desc);
-
-        if (!msg_ptr) {
-            mg.DepositADesc(desc);
-            I("got desc: %s", desc.to_string().c_str());
-            if (desc.type == TYPE_CHUNK_EOF || desc.type == TYPE_RAW_FRAME_EOF) {
-                cout << "teddy: end of chunk" << endl;
-                break;
-            }
-        }
-        else {
-            mg.DepositAFrame(desc, msg_ptr);
-            //stat.inc_byte_counter((int) msg_ptr->size());
-            //stat.inc_rec_counter(1);
-        }
-    }
-    //zmq_close(receiver);
-*/
 	/* consumption phase */
-	Frame f;
+	//Frame f;
 	int rc;
 	seq_t wm_c, wm_f;
 
@@ -245,7 +236,10 @@ int main (int argc, char *argv[])
     //bool detectRegion = false;
     std::string country;
     int topn;
-            //bool debug_mode = false;
+
+    timespec startTime;
+    timespec endTime;
+    //bool debug_mode = false;
 
     TCLAP::CmdLine cmd("OpenAlpr Command Line Utility", ' ', Alpr::getVersion());
     TCLAP::UnlabeledMultiArg<std::string> fileArg("image_file", "Image containing license plates", true, "",
@@ -308,26 +302,50 @@ int main (int argc, char *argv[])
 
     Alpr *alpr[64];
 
-    for(int m = 0; m < 60; m++){
+    for(int m = 0; m < 64; m++){
         alpr[m] = new Alpr(country, configFile);
         alpr[m]->setTopN(topn);
     }
 
-    //cv::Mat frame[72000];
-    Frame frame[72000];
-    int framesize = 320 * 180;
-    //char *imagedata[50];
-    //vector<string> imagedata[50];
+    int height = 180;
+    int width = 320;
+
+    //Frame frame[72005];
+    int framesize = height * width;
 
     int cont_flag = 0;
     //for(int iter = 0; iter < 3; iter++) {
     while(1){
+        Frame f;
+        Frame frame[72005];
+        Frame ff[64];
+
+        request_desc rd;
+        zmq::message_t rq_desc(sizeof(request_desc));
+
         if (cont_flag == 1)
             break;
 
-        /* Receiving frames */
+        EE("bound to %s. Enter your target database: (1-n)", REQUEST);
+        cin >> rd.db_seq;
 
-        while (1) {
+        EE("bound to %s. Enter start frame number: ", REQUEST);
+        cin >> rd.start_fnum;
+
+        EE("bound to %s. Enter total frame numbers: ", REQUEST);
+        cin >> rd.total_fnum;
+
+        /* Sending requests */
+        memcpy(rq_desc.data(), &rd, sizeof(request_desc));
+        rq_sender.send(rq_desc, ZMQ_PUSH);
+
+        I("Request sent, db: %d, frames: %d", rd.db_seq, rd.total_fnum);
+
+        I("Doing this again???????????????");
+
+        /* Receiving frames */
+        for(int iter = 0; iter < rd.total_fnum; iter++) {
+        //while(1){
             data_desc desc;
             auto msg_ptr = recv_one_frame(receiver, &desc);
 
@@ -346,16 +364,15 @@ int main (int argc, char *argv[])
 
         k2_measure("retrieve begins");
         /* Retrieving frames */
-        for(int iter = 0; iter < 72000; iter++) {
+        for(int i = rd.start_fnum; i < rd.start_fnum + rd.total_fnum; i++) {
             mg.GetWatermarks(&wm_c, &wm_f);
 
             I("watermarks:  chunk %u frame %u", wm_c, wm_f);
             rc = mg.RetrieveAFrame(&f);
 
-            frame[iter] = f;
+            frame[i] = f;
 
             //memcpy(frame[i], &f, sizeof(shared_ptr));
-
             if (rc == VS_ERR_EOF_CHUNKS)
                 break;
 
@@ -364,45 +381,122 @@ int main (int argc, char *argv[])
         k2_measure("retrieve ends");
 
         //Frame frame_720p[72000];
-        //int framesize_720 = 1280 * 720;
+        int height_720 = 720;
+        int width_720 = 1280;
+        int framesize_720 = height_720 * width_720;
+
+        omp_lock_t writelock;
+        omp_init_lock(&writelock);
 
         /* Processing Frames*/
         k2_measure("alpr begins");
+
         //#pragma omp parallel
         #pragma omp parallel for schedule(dynamic, 100) num_threads(30)
-        for (int j = 0; j < 72000; j++) {
+        for (int j = rd.start_fnum; j < rd.start_fnum + rd.total_fnum; j++) {
             int id = omp_get_thread_num();
             cv::Mat frm;
             char *imagedata = NULL;
-            //vector<string> imagedata[50];
 
             //char *imagedata = (char *) malloc(sizeof(char) * framesize);
             imagedata = static_cast<char *>(frame[j].msg_p->data()), frame[j].msg_p->size();
             //imagedata[id] = (char *)(frame[id*1440+j].msg_p->data()), frame[id*1440+j].msg_p->size();
 
-            frm.create(180, 320, CV_8UC1);
+            frm.create(height, width, CV_8UC1);
             memcpy(frm.data, imagedata, framesize);
 
-            //timespec startTime;
-            //getTimeMonotonic(&startTime);
-
             //bool plate_found = detectandshow(&alpr, frm, "", outputJson, id);
-            bool plate_found = detectandshow(alpr[id], frm, "", outputJson, id, wm_c, wm_f);
+            std::vector<AlprRegionOfInterest> regionsOfInterest = detectmotion(alpr[id], frm, "", outputJson, id, j);
 
-            //timespec endTime;
-            //getTimeMonotonic(&endTime);
-            //std::cout << "Motion Detection: " << diffclock(startTime, endTime) << "ms for frame " << j << std::endl;
+            sleep(1);
+            //omp_set_lock(&writelock);
 
-            if (!plate_found && !outputJson)
-                std::cout << "No license plates found." << std::endl;
+            zmq::message_t rq_desc720(sizeof(request_desc));
+            request_desc rd_one_frame;
+
+            if (regionsOfInterest.size()>0){
+                //zmq::message_t rq_desc720(sizeof(request_desc));
+                //request_desc rd_one_frame;
+
+                EE("bound to %s. ready to push 720 requests", REQUEST720);
+
+                //Specify the frame wants to retrieve
+                rd_one_frame.start_fnum = j;
+                rd_one_frame.db_seq = HDD_RAW_720;
+                rd_one_frame.total_fnum = 1;
+
+                cv::Mat frm_720;
+                Frame f720;
+
+                omp_set_lock(&writelock);
+
+                memcpy(rq_desc720.data(), &rd_one_frame, sizeof(request_desc));
+                rq720_sender.send(rq_desc720, ZMQ_PUSH);
+
+                I("Request sent, db: %d, frame: %d", rd_one_frame.db_seq, rd_one_frame.start_fnum);
+
+                for(int dc = 0; dc < 1; dc++) {
+                    I("start to get 720p frames");
+                    data_desc desc720;
+                    auto msg_ptr = recv_one_frame(receiver, &desc720);
+                    //I("msg_ptr = %lu", msg_ptr);
+                    //cout << desc.c_seq << endl;
+                    if (!msg_ptr) {
+                        mg.DepositADesc(desc720);
+                        I("got desc: %s", desc720.to_string().c_str());
+                    }
+                    else {
+                        I("got 720p, deposit a frame");
+                        mg.DepositAFrame(desc720, msg_ptr);
+                    }
+                }
+/*
+                mg.GetWatermarks(&wm_c, &wm_f);
+                I("watermarks:  chunk %u frame %u", wm_c, wm_f);
+                mg.RetrieveAFrame(&f);
+                //mg.RetrieveAFrame(&f);
+*/
+                for(int i = rd_one_frame.start_fnum; i < rd_one_frame.start_fnum + rd_one_frame.total_fnum; i++) {
+                    mg.GetWatermarks(&wm_c, &wm_f);
+
+                    I("watermarks:  chunk %u frame %u", wm_c, wm_f);
+                    rc = mg.RetrieveAFrame(&f);
+
+                    ff[id] = f;
+
+                    //memcpy(frame[i], &f, sizeof(shared_ptr));
+                    if (rc == VS_ERR_EOF_CHUNKS)
+                        break;
+
+                    //xzl_bug_on(rc != 0);
+                }
+
+                char *imagedata_720 = NULL;
+                //imagedata_720 = static_cast<char *>(ff[id].msg_p->data()), ff[id].msg_p->size();
+                imagedata_720 = (char*)(ff[id].msg_p->data()), ff[id].msg_p->size();
+
+                frm_720.create(height_720, width_720, CV_8UC1);
+                memcpy(frm_720.data, imagedata_720, framesize_720);
+
+                omp_unset_lock(&writelock);
+
+                getTimeMonotonic(&startTime);
+                bool plate_found = recognizeplate(alpr[id], frm_720, "", outputJson, id, j, regionsOfInterest);
+                if (!plate_found && !outputJson) {
+                    std::cout << "No license plates found." << std::endl;
+                }
+                getTimeMonotonic(&endTime);
+                std::cout << "Plate Recognition: " << diffclock(startTime, endTime) << "ms." << std::endl;
+
+            }
+            //omp_unset_lock(&writelock);
         }
+        omp_destroy_lock(&writelock);
         k2_measure("alpr ends");
         k2_measure_flush();
         cout << "count = " << mycount << endl;
     }
     //}
-    //k2_measure("alpr ends");
-    //k2_measure_flush();
 	/* XXX stop the stat collector */
 	stat_collector.stop();
 
