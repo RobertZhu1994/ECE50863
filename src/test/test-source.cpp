@@ -29,6 +29,9 @@
 using namespace std;
 using namespace vs;
 
+atomic<int> flag(0);
+//MDB_env *env;
+
 void send_chunks(const char *fname, int k)
 {
 	/* send the file k times */
@@ -137,7 +140,7 @@ void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int typ
 
 
 	/* -- wait for all outstanding? -- */
-	sleep (1);
+	sleep (10);
 
 	EE("total %u loaded & sent", cnt);
 
@@ -145,9 +148,55 @@ void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int typ
 	mdb_env_close(env);
 }
 
+void test_send_multi_from_db(const char *dbpath, zmq::socket_t & sender, int type)
+{
+    int rc;
+    MDB_env *env;
+    MDB_dbi dbi;
+    MDB_txn *txn;
+
+    rc = mdb_env_create(&env);
+    xzl_bug_on(rc != 0);
+
+    rc = mdb_env_set_mapsize(env, 1UL * 1024UL * 1024UL * 1024UL); /* 1 GiB */
+    xzl_bug_on(rc != 0);
+
+    rc = mdb_env_open(env, dbpath, 0, 0664);
+    xzl_bug_on(rc != 0);
+
+    rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
+    xzl_bug_on(rc != 0);
+
+    rc = mdb_dbi_open(txn, NULL, MDB_INTEGERKEY, &dbi);
+    xzl_bug_on(rc != 0);
+
+    mdb_txn_commit(txn); /* done open the db */
+
+    data_desc temp_desc(type);
+    temp_desc.cid.stream_id = 1001;
+    temp_desc.c_seq = 0;
+
+    //	data_desc temp_desc(type);
+
+    //unsigned cnt = send_multi_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
+    unsigned cnt = send_chunk_from_db(env, dbi, 0, UINT64_MAX, sender, temp_desc);
+    //	unsigned cnt = send_multi_from_db(env, dbi, 0, 1000 * 1000, sender, temp_desc);
+
+
+    /* -- wait for all outstanding? -- */
+    sleep (10);
+
+    EE("total %u loaded & sent", cnt);
+
+    mdb_dbi_close(env, dbi);
+    mdb_env_close(env);
+}
+
 void test_send_one_from_db(const char *dbpath, zmq::socket_t & sender, int type, int f_start, int f_end)
 {
+
 	int rc;
+
 	MDB_env *env;
 	MDB_dbi dbi;
 	MDB_txn *txn;
@@ -157,6 +206,13 @@ void test_send_one_from_db(const char *dbpath, zmq::socket_t & sender, int type,
 
 	rc = mdb_env_set_mapsize(env, 1UL * 1024UL * 1024UL * 1024UL); /* 1 GiB */
 	xzl_bug_on(rc != 0);
+
+	flag = 1;
+
+	rc = mdb_env_set_maxdbs(env, 4);
+    xzl_bug_on(rc != 0);
+
+    mdb_env_set_maxreaders(env, 30);
 
 	rc = mdb_env_open(env, dbpath, 0, 0664);
 	xzl_bug_on(rc != 0);
@@ -176,14 +232,16 @@ void test_send_one_from_db(const char *dbpath, zmq::socket_t & sender, int type,
 //	data_desc temp_desc(type);
 
 	unsigned cnt = send_multi_from_db(env, dbi, f_start, f_end, sender, temp_desc);
+    EE("frame %u loaded & sent from db %s", f_start, dbpath);
 
-	EE("frame %u loaded & sent from db %s", f_start, dbpath);
-    usleep (5000);
+    //std::atomic_thread_fence(std::memory_order_release);
 
-    mdb_dbi_close(env, dbi);
-	mdb_env_close(env);
+    asm volatile("" ::: "memory");
+	//free(env);
+
+    //mdb_dbi_close(env, dbi);
+	//mdb_env_close(env);
 }
-
 
 /* send raw frames (from a raw video file) over. */
 void send_raw_frames_from_file(const char *fname, zmq::socket_t &s,
@@ -249,6 +307,39 @@ static void *serv_stream_info(void *t) {
 }
 #endif
 
+void testing_send_one_from_db(MDB_env *env, const char *dbpath, zmq::socket_t & sender, int type, int f_start, int f_end)
+{
+
+    int rc;
+
+    MDB_dbi dbi;
+    MDB_txn *txn;
+
+    rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
+	I("%s",mdb_strerror(rc));
+    if(rc != 0){
+		I("rc = %d", rc);
+	}
+	xzl_bug_on(rc != 0);
+
+    rc = mdb_dbi_open(txn, NULL, MDB_INTEGERKEY, &dbi);
+    xzl_bug_on(rc != 0);
+
+    rc =  mdb_txn_commit(txn); /* done open the db */
+	xzl_bug_on(rc != 0);
+
+    data_desc temp_desc(type);
+    temp_desc.cid.stream_id = 1001;
+    temp_desc.c_seq = 1;
+
+    unsigned cnt = send_multi_from_db(env, dbi, f_start, f_end, sender, temp_desc);
+
+    EE("%u frames loaded & sent from db %s", cnt, dbpath);
+	//mdb_txn_abort(txn);
+    mdb_dbi_close(env, dbi);
+    //mdb_env_close(env);
+}
+
 /* argv[1] -- the video file name */
 int main (int argc, char *argv[])
 {
@@ -291,7 +382,29 @@ int main (int argc, char *argv[])
 			I("failed to get fb");
 	}
 #endif
-    request_desc *rd;
+#if 1
+    int rc;
+    MDB_env *env[2];
+
+	//MDB_dbi dbi;
+    //MDB_txn *txn;
+	for(int i = 0; i < 2; i++){
+		rc = mdb_env_create(&env[i]);
+		xzl_bug_on(rc != 0);
+
+		rc = mdb_env_set_mapsize(env[i], 1UL * 1024UL * 1024UL * 1024UL); /* 1 GiB */
+		xzl_bug_on(rc != 0);
+	}
+
+	rc = mdb_env_open(env[0], DB_RAW_FRAME_PATH_NVME_720, 0, 0664);
+	xzl_bug_on(rc != 0);
+
+	rc = mdb_env_open(env[1], DB_RAW_FRAME_PATH_NVME_540, 0, 0664);
+	xzl_bug_on(rc != 0);
+
+#endif
+
+	request_desc *rd;
 
     while(1){
         zmq::message_t q_request(sizeof(request_desc));
@@ -311,55 +424,42 @@ int main (int argc, char *argv[])
                 //	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
                 memcpy (reply.data (), "World", 5);
                 s_frame.send(reply);
+
                 test_send_multi_from_db(DB_RAW_FRAME_PATH, frame_range, TYPE_RAW_FRAME, 2 * rd->start_fnum + 2, 2 * rd->start_fnum + 2 * rd->total_fnum);
                 //test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME);
                 break;
-            case HDD_RAW_720:
+            case NVME_RAW_720:
+                //EE("flag = ", flag);
+                I("connect to %s. ready to push raw frames", REQUEST_PULL_ADDR);
+                //test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
+                //test_send_multi_from_db(DB_RAW_FRAME_PATH_720, frame_range, TYPE_RAW_FRAME, 2 * rd->start_fnum, 2 * rd->start_fnum + 1);
+                //test_send_one_from_db(DB_RAW_FRAME_PATH_SSD_720, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum + 2, 2 * rd->start_fnum + 3);
+                testing_send_one_from_db(env[0], DB_RAW_FRAME_PATH_NVME_720, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum + 2, 2 * rd->start_fnum + 2 * rd->total_fnum + 1);
+				break;
+            case NVME_RAW_540:
+                //EE("flag = ", flag);
                 I("connect to %s. ready to push raw frames", REQUEST_PULL_ADDR);
                 //	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
-                //memcpy (reply.data (), "World", 5);
-                //s_frame.send(reply);
-                test_send_one_from_db(DB_RAW_FRAME_PATH_720, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum + 2, 2 * rd->start_fnum + 3);
-                //test_send_multi_from_db(DB_RAW_FRAME_PATH_720, frame_range, TYPE_RAW_FRAME, 2 * rd->start_fnum, 2 * rd->start_fnum + 1);
+                //test_send_one_from_db(DB_RAW_FRAME_PATH_SSD_540, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum + 2, 2 * rd->start_fnum + 3);
+                testing_send_one_from_db(env[1], DB_RAW_FRAME_PATH_NVME_540, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum + 2, 2 * rd->start_fnum + 2 * rd->total_fnum + 1);
+				break;
+            case HDD_RAW_360:
+                I("connect to %s. ready to push raw frames", REQUEST_PULL_ADDR);
+                //	test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
+                //test_send_one_from_db(DB_RAW_FRAME_PATH_SSD_360, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum + 2, 2 * rd->start_fnum + 3);
+                break;
+            case NVME_CHUNK_720:
+                I("connect to %s. ready to push raw frames", REQUEST_PULL_ADDR);
+                //test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
+                break;
+            case NVME_CHUNK_180:
+                I("connect to %s. ready to push raw frames", REQUEST_PULL_ADDR);
+                test_send_multi_from_db(DB_PATH, sender, TYPE_CHUNK);
                 break;
             default:
                 break;
         }
     }
-
-/*
-//	test_send_raw_frames_from_file(argv[1], s_frame);
-    zmq::message_t rq_desc(sizeof(request_desc));
-    request_desc *rd;
-
-    s_frame.recv(&rq_desc);
-    rd = (request_desc *)(rq_desc.data()), rq_desc.size();
-    I("got desc msg. db_seq =%lu. start =%lu frame_num=%lu\n", rd->db_seq, rd->start_fnum, rd->total_fnum);
-
-    test_send_multi_from_db(DB_RAW_FRAME_PATH, s_frame, TYPE_RAW_FRAME, 2 * rd->start_fnum, 2 * rd->start_fnum + 2*rd->total_fnum);
-	zmq_close(&rq_desc);
-
-	zmq::socket_t frame720_request(context, ZMQ_PULL);
-	frame720_request.connect(WORKER720_REQUEST);
-
-	while(1){
-
-		I("connect to %s. ready to get new 720p requests", WORKER720_REQUEST);
-
-		//zmq::message_t rq720_desc(sizeof(request_desc));
-		//memcpy(rq720_desc.data(), &rq720_desc, sizeof(request_desc));
-		zmq::message_t rq720_desc;
-		request_desc *rd720;
-
-		auto rc = frame720_request.recv(&rq720_desc);
-		rd720 = (request_desc *)(rq720_desc.data()), rq720_desc.size();
-
-		I("rc=%lu",rc);
-		I("got desc msg. db_seq =%lu. start =%lu frame_num=%lu\n", rd720->db_seq, rd720->start_fnum, rd720->total_fnum);
-
-		test_send_one_from_db(DB_RAW_FRAME_PATH_720, s_frame, TYPE_RAW_FRAME, 2 * rd720->start_fnum);
-	}
-*/
 
 	//	rc = pthread_join(si_server, nullptr); /* will never join.... XXX */
 	//	xzl_bug_on(rc != 0);

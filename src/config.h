@@ -29,15 +29,29 @@
 #define REQUEST720 								"tcp://*:5562"
 
 #define DB_PATH 							"/shared/videos/lmdb/"
+#define DB_PATH_CHUNK_NVME_720     			"/mnt/nvme/lmdb-chunk720"
+#define DB_PATH_CHUNK_NVME_540     			"/mnt/nvme/lmdb-chunk540"
+#define DB_PATH_CHUNK_NVME_180     			"/mnt/nvme/lmdb-chunk180"
 #define DB_RAW_FRAME_PATH 		"/shared/videos/lmdb-rf/"
 #define DB_RAW_FRAME_PATH_720   "/shared/videos/lmdb-rf720"
+#define DB_RAW_FRAME_PATH_SSD_720   "/ssd/lmdb-rfssd720"
+#define DB_RAW_FRAME_PATH_SSD_540   "/ssd/lmdb-rfssd540"
+#define DB_RAW_FRAME_PATH_SSD_360   "/ssd/lmdb-rfssd360"
+#define DB_RAW_FRAME_PATH_NVME_720   "/mnt/nvme/lmdb-rfssd720"
+#define DB_RAW_FRAME_PATH_NVME_540   "/mnt/nvme/lmdb-rfssd540"
+#define DB_RAW_FRAME_PATH_NVME_360   "/mnt/nvme/lmdb-rfssd360"
 //#define DB_RAW_FRAME_PATH 		"/shared/videos/lmdb-rf-ssd/"
+
+
+#define CHUNK_SIZE 5
 
 enum db_sequence{
     HDD_RAW_180=0,
-    HDD_RAW_720,
-    HDD_CHUNK_180,
-    HDD_CHUNK_720
+    HDD_RAW_360,
+    NVME_RAW_540,
+    NVME_RAW_720,
+    NVME_CHUNK_180,
+    NVME_CHUNK_720
 };
 
 #endif //VIDEO_STREAMER_CONFIG_H

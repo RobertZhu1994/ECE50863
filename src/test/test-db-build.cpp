@@ -107,7 +107,7 @@ void build_chunk_db(void)
 	rc = mdb_env_set_mapsize(env, 1UL * 1024UL * 1024UL * 1024UL); /* 1 GiB */
 	xzl_bug_on(rc != 0);
 
-	rc = mdb_env_open(env, DB_PATH, 0, 0664);
+	rc = mdb_env_open(env, DB_PATH_CHUNK_NVME_180, 0, 0664);
 	xzl_bug_on(rc != 0);
 
 	rc = mdb_txn_begin(env, NULL, 0, &txn);
@@ -118,7 +118,10 @@ void build_chunk_db(void)
 	rc = mdb_dbi_open(txn, NULL, MDB_INTEGERKEY | MDB_CREATE, &dbi);
 	xzl_bug_on(rc != 0);
 
-	auto fnames = get_all_files_dir(input_dir);
+	vector<string> fnames;
+	fnames.push_back("/shared/videos/alpr320x180.mp4");
+
+	//auto fnames = get_all_files_dir(input_dir);
 
 	srand (time(NULL));
 
@@ -160,10 +163,10 @@ void build_chunk_db(void)
 
 //char input_raw_video[] = "/shared/videos/raw-320x240-yuv420p.yuv";
 //char input_raw_video[] = "/shared/videos/miami40min.yuv";
-char input_raw_video[] = "/shared/videos/alpr1280x720.yuv";
+char input_raw_video[] = "/shared/videos/alpr960x540.yuv";
 
-static int height = 720;
-static int width = 1280;
+static int height = 540;
+static int width = 960;
 static int yuv_mode = 420;
 static int fps = 30;
 
@@ -218,8 +221,8 @@ void build_raw_frame_db(const char *fname)
     //xzl_bug_on(rc != 0);
 
     /* build lmdb to the path */
-    EE("going to open db path %s", DB_RAW_FRAME_PATH_720);
-    rc = mdb_env_open(env, DB_RAW_FRAME_PATH_720, 0, 0664);
+    EE("going to open db path %s", DB_RAW_FRAME_PATH_NVME_540);
+    rc = mdb_env_open(env, DB_RAW_FRAME_PATH_NVME_540, 0, 0664);
 	xzl_bug_on(rc != 0);
 
 	rc = mdb_txn_begin(env, NULL, 0, &txn);
@@ -274,8 +277,8 @@ void build_raw_frame_db(const char *fname)
 
 int main() {
 
-//	build_chunk_db();
-	build_raw_frame_db(input_raw_video);
+	build_chunk_db();
+//	build_raw_frame_db(input_raw_video);
 
 	return 0;
 }

@@ -21,6 +21,7 @@
 #include <zmq.hpp>
 
 #include "mm.h"
+#include "config.h"
 
 namespace vs {
 
@@ -248,6 +249,17 @@ namespace vs {
 		int db_seq;
 		int start_fnum;
 		int total_fnum;
+	};
+
+	struct data_chunk{
+		uint8_t *dt;
+	};
+
+	struct chunk_info{
+	public:
+		//std::array<uint8_t*, 1382400>
+		//uint8_t *chunk_data[5][1382400];
+		uint8_t *chunk_ptr[5];
 	};
 
 } // namespace vs

@@ -121,6 +121,9 @@ SET (COMMON_LIBS
         boost_program_options
         boost_serialization
         X11
+		opencv_core
+		opencv_highgui
+		opencv_imgproc
         )
 
 find_package(OpenMP)
@@ -223,6 +226,7 @@ TARGET_LINK_LIBRARIES(${PROGRAM}.bin
         lmdb
         zmq
 		openalpr
+		openalpr-static
 		opencv_core
 		opencv_highgui
 		opencv_imgproc
@@ -241,6 +245,9 @@ TARGET_LINK_LIBRARIES(${BINARY}
         ${COMMON_LIBS}
         lmdb
         zmq
+		opencv_core
+		opencv_highgui
+		opencv_imgproc
         )
 add_custom_command(TARGET ${BINARY} POST_BUILD
         COMMAND scp ${BINARY} ${deploy_target_path}/${CMAKE_BUILD_TYPE}/

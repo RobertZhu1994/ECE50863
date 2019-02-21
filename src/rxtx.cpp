@@ -7,6 +7,9 @@
 #include <sstream>
 #include <zmq.hpp>
 //#include "zhelpers.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+
 extern "C" {
 #include <libavutil/mem.h>
 #include "measure.h"
@@ -93,14 +96,24 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 {
 	MDB_txn *txn;
 	MDB_val key, data;
+    //vs::chunk_info chunk;
+	cv::Mat chunk[CHUNK_SIZE];
 	MDB_cursor *cursor;
 	MDB_cursor_op op;
 	int rc;
+
+	int height_720 = 720;
+	int width_720 = 1280;
+	int framesize_720 = height_720 * width_720;
 
 	xzl_assert(env);
 
 	rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
 	xzl_bug_on(rc != 0);
+	if(rc != 0){
+		I("rc = %d", rc);
+		I("%s",mdb_strerror(rc));
+	}
 
 	rc = mdb_cursor_open(txn, dbi, &cursor);
 	xzl_bug_on(rc != 0);
@@ -150,15 +163,48 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
         if (start.as_uint + 1 == end.as_uint){
             send_one_720_from_db((uint8_t *) data.mv_data, data.mv_size, s, desc, hint);
         }
+        else if(start.as_uint + 1 + (CHUNK_SIZE - 1) * 2 == end.as_uint){
+            /*
+			char *imagedata_720 = NULL;
+			imagedata_720 = (char*)(data.mv_data), data.mv_size;
+			chunk[cnt].create(height_720, width_720, CV_8UC1);
+			memcpy(chunk[cnt].data, imagedata_720, framesize_720);
+            //cout << chunk[cnt] << endl;
+             */
+            if(cnt < CHUNK_SIZE - 1){
+                zmq::message_t cmsg((uint8_t *) data.mv_data, data.mv_size, my_free /* our deallocation func */, (void *) hint);
+                auto ret = s.send(cmsg, ZMQ_SNDMORE);
+            }
+            else{
+                zmq::message_t cmsg((uint8_t *) data.mv_data, data.mv_size, my_free /* our deallocation func */, (void *) hint);
+                auto ret = s.send(cmsg, 0);
+                //send_one_chunk_from_db(chunk, CHUNK_SIZE * data.mv_size, s, desc, hint);
+            }
+        }
         else {
             send_one_from_db((uint8_t *) data.mv_data, data.mv_size, s, desc, hint);
         }
         cnt ++;
 	}
 
-	if(start.as_uint == end.as_uint - 1){
-		return cnt;
+    /*
+    //asm volatile("" ::: "memory");
+    if(start.as_uint + 1 + (CHUNK_SIZE - 1) * 2 == end.as_uint){
+        //I("sent from here, size = %d", sizeof(*(uint8_t *)(data.mv_data)));
+        data_desc desc(temp_desc);
+        send_one_chunk_from_db(chunk, CHUNK_SIZE * data.mv_size, s, desc, hint);
+        mdb_txn_abort(txn);
+        I("abort here2");
+        return cnt;
+    }
+    */
+    if(start.as_uint == end.as_uint - 1 || start.as_uint + 1 + (CHUNK_SIZE - 1) * 2 == end.as_uint){
+        I("abort here1");
+        mdb_txn_abort(txn);
+        return cnt;
 	}
+
+	I("Any more");
 
 	/* send the eof -- depending whether we are sending frames or chunks */
 	switch (temp_desc.type) {
@@ -183,8 +229,75 @@ unsigned send_multi_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end,
 		mdb_cursor_close(cursor);
 		mdb_txn_abort(txn);
 	}
-
 	return cnt;
+}
+
+unsigned send_chunk_from_db(MDB_env *env, MDB_dbi dbi, cid_t start, cid_t end, zmq::socket_t &s, data_desc const &temp_desc /* template. */)
+{
+    MDB_txn *txn;
+    MDB_val key, data;
+    MDB_cursor *cursor;
+    MDB_cursor_op op;
+    int rc;
+
+    xzl_assert(env);
+
+    rc = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
+    xzl_bug_on(rc != 0);
+
+    rc = mdb_cursor_open(txn, dbi, &cursor);
+    xzl_bug_on(rc != 0);
+
+    my_alloc_hint *hint = new my_alloc_hint(USE_LMDB_REFCNT);
+    hint->txn = txn;
+    hint->cursor = cursor;
+
+    int cnt = 0;
+
+    /* once we start to send, the refcnt can be dec by the async sender,
+     * which means it can go neg. */
+    while (1) {
+        rc = mdb_cursor_get(cursor, &key, &data, MDB_NEXT);
+        if (rc == MDB_NOTFOUND)
+            break;
+
+        cid_t id = *(cid_t *)key.mv_data;
+
+        if (id.as_uint >= end.as_uint)
+            break;
+
+        I("loaded one k/v. key: %lu, sz %zu data sz %zu",
+          *(uint64_t *)key.mv_data, key.mv_size,
+          data.mv_size);
+
+        data_desc desc(temp_desc); /* copy ctor */
+        switch (desc.type) {
+            case TYPE_RAW_FRAME:
+                desc.cid = id;
+                break;
+            case TYPE_CHUNK:
+                /* XXX */
+                break;
+            default:
+                xzl_bug("???");
+        }
+
+        /* XXX more. check desc.type and fill in the rest of the desc... */
+        send_one_from_db((uint8_t *)data.mv_data, data.mv_size, s, desc, hint);
+        cnt ++;
+    }
+
+    /* bump refcnt one time */
+    int before = hint->refcnt.fetch_add(cnt);
+    xzl_bug_on(before < - cnt ); /* impossible */
+
+    if (before == - cnt) { /* meaning that refcnt reaches 0... all outstanding chunks are sent */
+        W("close the tx");
+        mdb_cursor_close(cursor);
+        mdb_txn_abort(txn);
+    }
+
+    return cnt;
 }
 
 /* send a decoded frame as one message with two parts,
@@ -341,6 +454,7 @@ int send_one_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 
 	/* send the chunk */
 	zmq::message_t cmsg(buffer, sz, my_free /* our deallocation func */, (void *) hint);
+    //I("size = %d", sizeof(uint8_t *));
 	auto ret = sender.send(cmsg, 0); /* no more msg */
 	xzl_bug_on(!ret);
 
@@ -371,10 +485,53 @@ int send_one_720_from_db(uint8_t * buffer, size_t sz, zmq::socket_t &sender,
 
     /* send the chunk */
     zmq::message_t cmsg(buffer, sz, my_free /* our deallocation func */, (void *) hint);
+    I("%d", sz);
     auto ret = sender.send(cmsg, 0); /* no more msg */
     xzl_bug_on(!ret);
 
     VV("frame sent");
+
+    return 0;
+}
+
+int send_one_chunk_from_db(cv::Mat chunk[5], size_t sz, zmq::socket_t &sender,
+                         data_desc const & desc, my_alloc_hint * hint) {
+    xzl_bug_on(!chunk || !hint);
+    /* send frame desc */
+    ostringstream oss;
+    boost::archive::text_oarchive oa(oss);
+
+    oa << desc;
+    string s = oss.str();
+
+    /* desc msg. explicit copy content over */
+    zmq::message_t dmsg(s.size());
+    memcpy(dmsg.data(), s.c_str(), s.size());
+    //zmq::message_t dmsg(s.begin(), s.end());
+    //sender.send(dmsg, ZMQ_SNDMORE); /* multipart msg */
+
+    //VV("desc sent");
+    I("send_one_chunk_from_db");
+
+    /* send the chunk */
+//    zmq::message_t cmsg(sz);
+//    memcpy(cmsg.data(), &chunk, sz);
+    for(int i = 0; i < CHUNK_SIZE; i++){
+        if(i < CHUNK_SIZE - 1){
+            I("%d, size = %d", i, sizeof(chunk[i]));
+            zmq::message_t cmsg(&chunk[i], 1382400, my_free /* our deallocation func */, (void *) hint);
+            auto ret = sender.send(cmsg, ZMQ_SNDMORE); /* no more msg */
+            xzl_bug_on(!ret);
+        }
+        else{
+            I("%d", i);
+            zmq::message_t cmsg(&chunk[i], 1382400, my_free /* our deallocation func */, (void *) hint);
+            auto ret = sender.send(cmsg, 0); /* no more msg */
+            xzl_bug_on(!ret);
+        }
+    }
+
+    I("frame sent size = %d", sz);
 
     return 0;
 }
@@ -552,9 +709,6 @@ shared_ptr<zmq::message_t> recv_one_frame_720(zmq::socket_t & recv) {
     xzl_bug_on(!ret); /* EAGAIN? */
     I("got chunk msg. size =%lu", cmsg->size());
 
-    //if (fdesc)
-    //    *fdesc = desc;
-
     return cmsg;
 }
 
@@ -605,6 +759,36 @@ shared_ptr<zmq::message_t> recv_one_chunk(zmq::socket_t & s, data_desc *desc) {
 
 		return cmsg;
 	}
+}
+
+/* recv a desc msg and a chunk msg.
+ *
+ * for the chunk msg,
+ * return a shared ptr of msg, so that we can access its data() later
+ * [ there seems no safe way of moving out its data. ]
+ *
+ * if the desc indicates eof of a chunk seq, there will be no chunk data.
+ * in that case, @desc will be filled but nullptr will be returned.
+ *
+ */
+shared_ptr<zmq::message_t> recv_one_chunk_720(zmq::socket_t & s) {
+//	zmq::context_t context(1 /* # io threads */);
+    EE("start to rx msgs...");
+
+    data_desc desc;
+    zmq::message_t dmsg;
+
+    shared_ptr<zmq::message_t> cmsg = nullptr;
+
+    cmsg = make_shared<zmq::message_t>();
+    xzl_bug_on(!cmsg);
+
+    auto ret = s.recv(cmsg.get());
+
+    xzl_bug_on(!ret); /* EAGAIN? */
+    I("got chunk msg. size =%lu", cmsg->size());
+
+    return cmsg;
 }
 
 /* recv a desc and a chunk from socket.

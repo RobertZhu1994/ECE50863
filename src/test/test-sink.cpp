@@ -48,6 +48,8 @@
 
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/core/operations.hpp"
+#include "opencv2/core/core.hpp"
 
 #include "tclap/CmdLine.h"
 #include "openalpr/support/filesystem.h"
@@ -56,6 +58,7 @@
 #include "video/videobuffer.h"
 #include "openalpr/motiondetector.h"
 #include "openalpr/alpr.h"
+#include <queue>
 
 extern "C"{
 #include <omp.h>
@@ -84,6 +87,9 @@ std::string templatePattern;
 // so we can end infinite loops for things like video processing.
 bool program_active = true;
 
+bool flag_720;                           //flag indicate that it is currently feeding 720p video chunk to the client
+bool flag_540;
+int chunk_num=5;
 /*
 static StatCollector stat;
 
@@ -144,16 +150,37 @@ std::vector<AlprRegionOfInterest> detectmotion( Alpr* alpr, cv::Mat frame, std::
     return regionsOfInterest;
 }
 
-bool recognizeplate( Alpr* alpr, cv::Mat frame_720, std::string region, bool writeJson, int proc_id, int f_seq, std::vector<AlprRegionOfInterest> regionsOfInterest){
+//bool recognizeplate( Alpr* alpr, cv::Mat frame_720, std::string region, bool writeJson, int proc_id, int f_seq, std::vector<AlprRegionOfInterest> regionsOfInterest){
+std::queue<PlateRegion> recognizeRegion( Alpr* alpr, cv::Mat frame_720, std::string region, bool writeJson, int proc_id, int f_seq, std::vector<AlprRegionOfInterest> regionsOfInterest) {
 
     AlprResults results;
+    std::queue<PlateRegion> plateQueue;
 
     /* Recognition phase */
     //getTimeMonotonic(&startTime);
-    results = alpr->recognize(frame_720.data, frame_720.elemSize(), frame_720.cols, frame_720.rows, regionsOfInterest);
+    /*
+    int arraySize = frame_720.cols * frame_720.rows * frame_720.elemSize();
+    cv::Mat imgData = cv::Mat(arraySize, 1, CV_8U, frame_720.data);
+    cv::Mat img = imgData.reshape(frame_720.elemSize(), frame_720.elemSize());
+
+    if (regionsOfInterest.size() == 0) {
+        AlprRegionOfInterest fullFrame(0, 0, img.cols, img.rows);
+        regionsOfInterest.push_back(fullFrame);
+    }
+    */
+
+    //results = alpr->recognize(frame_720.data, frame_720.elemSize(), frame_720.cols, frame_720.rows, frame_ocr, regionsOfInterest);
+    //splateQueue = alpr->recognizeregion(frame_720.data, frame_720.elemSize(), frame_720.cols, frame_720.rows, regionsOfInterest);
+
+    plateQueue =  alpr->recognizeregion(frame_720.data, frame_720.elemSize(), frame_720.cols, frame_720.rows, regionsOfInterest);
+
+    I("platequeue.size = %d", plateQueue.size());
+
+    return plateQueue;
+    //results = alpr->recognize(frame_720.data, frame_720.elemSize(), frame_720.cols, frame_720.rows, regionsOfInterest);
 
     /* print the ROI */
-    cout << regionsOfInterest[0].x << " " << regionsOfInterest[0].y << " " << regionsOfInterest[0].width << " " << regionsOfInterest[0].height << " " << endl;
+    //cout << regionsOfInterest[0].x << " " << regionsOfInterest[0].y << " " << regionsOfInterest[0].width << " " << regionsOfInterest[0].height << " " << endl;
 
     //getTimeMonotonic(&endTime);
     //std::cout << "Total Plate Recognition: " << diffclock(startTime, endTime) << "ms." << std::endl;
@@ -163,6 +190,62 @@ bool recognizeplate( Alpr* alpr, cv::Mat frame_720, std::string region, bool wri
         std::cout << "Total Time to process image: " << totalProcessingTime << "ms." << std::endl;
     }
     */
+}
+
+bool recognizeplate( Alpr* alpr, cv::Mat frame_720, std::string region, bool writeJson, int proc_id, int f_seq, std::vector<AlprRegionOfInterest> regionsOfInterest)
+{
+    AlprResults results;
+
+    results = alpr->recognize(frame_720.data, frame_720.elemSize(), frame_720.cols, frame_720.rows, regionsOfInterest);
+    if (writeJson)
+    {
+        std::cout << alpr->toJson( results ) << std::endl;
+    }
+    else
+    {
+        for (int i = 0; i < results.plates.size(); i++)
+        {
+            std::cout << "plate" << i << ": " << results.plates[i].topNPlates.size() << " results";
+            if (measureProcessingTime)
+                std::cout << " -- Processing Time = " << results.plates[i].processing_time_ms << "ms.";
+            std::cout << std::endl;
+
+            if (results.plates[i].regionConfidence > 0)
+                std::cout << "State ID: " << results.plates[i].region << " (" << results.plates[i].regionConfidence << "% confidence)" << std::endl;
+
+            for (int k = 0; k < results.plates[i].topNPlates.size(); k++)
+            {
+                // Replace the multiline newline character with a dash
+                std::string no_newline = results.plates[i].topNPlates[k].characters;
+                std::replace(no_newline.begin(), no_newline.end(), '\n','-');
+
+                std::cout << "    - " << no_newline << "\t confidence: " << results.plates[i].topNPlates[k].overall_confidence;
+                if (templatePattern.size() > 0 || results.plates[i].regionConfidence > 0)
+                    std::cout << "\t pattern_match: " << results.plates[i].topNPlates[k].matches_template;
+
+                std::cout << std::endl;
+            }
+        }
+    }
+
+    return results.plates.size() > 0;
+}
+
+bool recognizePlate( Alpr* alpr, cv::Mat frame_ocr, cv::Mat frame_ocr_gray, std::string region, bool writeJson, int proc_id, int f_seq, queue<PlateRegion> plateQueue)
+{
+    AlprResults results;
+
+    //cout << plateQueue.front().rect.x << endl;
+    //cout << frame_ocr.cols << endl;
+    //for(auto iter = plateQueue.front(); iter != plateQueue.back(); iter ++){
+    //    cout << plateQueue.front().rect.x << endl;
+    //    cout << plateQueue.front().rect.y << endl;
+    //    cout << plateQueue.front().rect.width << endl;
+    //    cout << plateQueue.front().rect.height << endl;
+
+    //}
+
+    results = alpr->recognizeresult(frame_ocr, frame_ocr_gray, plateQueue);
 
     if (writeJson)
     {
@@ -310,7 +393,7 @@ int main (int argc, char *argv[])
     //for(int iter = 0; iter < 3; iter++) {
     while(1){
         Frame f;
-        Frame frame[72005];
+        Frame frame[50000];
 
         request_desc rd;
         zmq::message_t rq_desc(sizeof(request_desc));
@@ -319,13 +402,16 @@ int main (int argc, char *argv[])
             break;
 
         EE("connect to %s. Enter your target database: (1-n)", WORKER_REQUEST);
-        cin >> rd.db_seq;
+        //cin >> rd.db_seq;
+        rd.db_seq = 0;
 
         EE("connect to %s. Enter start frame number: ", WORKER_REQUEST);
-        cin >> rd.start_fnum;
+        //cin >> rd.start_fnum;
+        rd.start_fnum = 0;
 
         EE("connect to %s. Enter total frame numbers: ", WORKER_REQUEST);
-        cin >> rd.total_fnum;
+        //cin >> rd.total_fnum;
+        rd.total_fnum = 40000;
 
         /* Sending requests */
         memcpy(rq_desc.data(), &rd, sizeof(request_desc));
@@ -333,6 +419,7 @@ int main (int argc, char *argv[])
 
         I("Request sent, db: %d, frames: %d", rd.db_seq, rd.total_fnum);
 
+        k2_measure("receive begins");
         /* Receiving frames */
         for(int iter = 0; iter < rd.total_fnum; iter++) {
             data_desc desc;
@@ -351,18 +438,19 @@ int main (int argc, char *argv[])
                 //stat.inc_rec_counter(1);
             }
         }
+        k2_measure("receive ends");
 
         k2_measure("retrieve begins");
+
         /* Retrieving frames */
         for(int i = rd.start_fnum; i < rd.start_fnum + rd.total_fnum; i++) {
             mg.GetWatermarks(&wm_c, &wm_f);
 
-            I("watermarks:  chunk %u frame %u", wm_c, wm_f);
+            //I("watermarks:  chunk %u frame %u", wm_c, wm_f);
             rc = mg.RetrieveAFrame(&f);
 
             frame[i] = f;
 
-            //memcpy(frame[i], &f, sizeof(shared_ptr));
             if (rc == VS_ERR_EOF_CHUNKS)
                 break;
 
@@ -378,34 +466,37 @@ int main (int argc, char *argv[])
         int width_720 = 1280;
         int framesize_720 = height_720 * width_720;
 
-        //omp_lock_t writelock;
-        //omp_init_lock(&writelock);
+        int height_ocr = 540;
+        int width_ocr = 960;
+        int framesize_ocr = height_ocr * width_ocr;
 
         /* Processing Frames*/
         k2_measure("alpr begins");
 
-/*
-        zmq::socket_t *worker_get[30];
-        for(int worker_count = 0; worker_count < 30; worker_count++){
-            worker_get[worker_count]= new zmq::socket_t(context, ZMQ_REQ);
-            worker_get[worker_count]->connect(WORKER_REQUEST);
-        }
-*/
-        zmq::socket_t *worker_socket[30];
-        for(int worker_count = 0; worker_count < 30; worker_count++){
+        zmq::socket_t *worker_socket[50];
+        for(int worker_count = 0; worker_count < 50; worker_count++){
             worker_socket[worker_count]= new zmq::socket_t(context, ZMQ_REQ);
             worker_socket[worker_count]->connect(WORKER_REQUEST);
         }
 
         Frame fp[64];
+        shared_ptr<zmq::message_t> pre_buf_720[50][chunk_num*CHUNK_SIZE];
+        shared_ptr<zmq::message_t> pre_buf_540[50][chunk_num*CHUNK_SIZE];
 
-        #pragma omp parallel for schedule(dynamic, 100) num_threads(30)
+        int status_720[50];
+        int status_540[50];
+
+        for(int iter = 0; iter < 50; iter ++){ //---------------------------------------------------------------------//
+            status_720[iter] = -chunk_num*CHUNK_SIZE-1;
+            status_540[iter] = -chunk_num*CHUNK_SIZE-1;
+        }
+
+        #pragma omp parallel for schedule(dynamic, 100) num_threads(10)
         for (int j = rd.start_fnum; j < rd.start_fnum + rd.total_fnum; j++) {
             int id = omp_get_thread_num();
             cv::Mat frm;
             char *imagedata = nullptr;
 
-            //char *imagedata = (char *) malloc(sizeof(char) * framesize);
             imagedata = static_cast<char *>(frame[j].msg_p->data()), frame[j].msg_p->size();
             //imagedata[id] = (char *)(frame[id*1440+j].msg_p->data()), frame[id*1440+j].msg_p->size();
 
@@ -415,86 +506,261 @@ int main (int argc, char *argv[])
             //bool plate_found = detectandshow(&alpr, frm, "", outputJson, id);
             std::vector<AlprRegionOfInterest> regionsOfInterest = detectmotion(alpr[id], frm, "", outputJson, id, j);
 
-            //sleep(5);
-            //omp_set_lock(&writelock);
-
             zmq::message_t rq_desc720(sizeof(request_desc));
             request_desc rd_one_frame;
+            zmq::message_t rq_descocr(sizeof(request_desc));
+            request_desc rd_one_frame_ocr;
 
-            if (regionsOfInterest.size()>0){
-                //zmq::message_t rq_desc720(sizeof(request_desc));
-                //request_desc rd_one_frame;
-
+            //if (regionsOfInterest.size() > 0 && (j % 3 == 0)){
+            if (regionsOfInterest.size() > 0){
                 //Specify the frame wants to retrieve
-                rd_one_frame.db_seq = HDD_RAW_720;
+                rd_one_frame.db_seq = NVME_RAW_720;
                 rd_one_frame.start_fnum = j;
-                rd_one_frame.total_fnum = 1;
+                rd_one_frame.total_fnum = CHUNK_SIZE;
 
                 cv::Mat frm_720;
                 Frame f720;
 
-                //omp_set_lock(&writelock);
+                //Specify the frame wants to retrieve
+                rd_one_frame_ocr.db_seq = NVME_RAW_540;
+                rd_one_frame_ocr.start_fnum = j;
+                rd_one_frame_ocr.total_fnum = CHUNK_SIZE;
+
+                cv::Mat frm_ocr;
+                Frame focr;
 
                 memcpy(rq_desc720.data(), &rd_one_frame, sizeof(request_desc));
-                worker_socket[id]->send(rq_desc720);
+                memcpy(rq_descocr.data(), &rd_one_frame_ocr, sizeof(request_desc));
 
-                I("Request sent, db: %d, frame: %d", rd_one_frame.db_seq, rd_one_frame.start_fnum);
 
-                //zmq::message_t reply(5);
-                //worker_get[id]->recv(&reply);
-/*
-                for(int dc = 0; dc < 1; dc++) {
-                    I("start to get 720p frames");
-                    data_desc desc720;
-                    auto msg_ptr = recv_one_frame_720(*worker_socket[id], &desc720);
-                    //auto msg_ptr = recv_one_frame(receiver, &desc720);
-                    if (!msg_ptr) {
-                        mg.DepositADesc(desc720);
-                        I("got desc: %s", desc720.to_string().c_str());
+                shared_ptr<zmq::message_t> msg_ptr;
+
+                cv::Mat chunk;
+                cv::Mat chunk_ocr;
+
+                //worker_socket[id]->send(rq_desc720);
+                //I("Request sent, db: %d, frame: %d", rd_one_frame.db_seq, rd_one_frame.start_fnum);
+
+                /********* Initializing 5 CHUNKS of New Frames (720p)  **********/
+#if 1
+
+
+                if(j-status_720[id] > chunk_num*CHUNK_SIZE){
+                    for(int i=0;i<chunk_num;i++)
+                    {
+                        worker_socket[id]->send(rq_desc720);
+                        I("Initial request sent, db: %d, frame: %d", rd_one_frame.db_seq, rd_one_frame.start_fnum);
+                        for (int iter = 0; iter < rd_one_frame.total_fnum; iter++) {
+                            msg_ptr = recv_one_chunk_720(*worker_socket[id]);
+                            I("Initial prefetch %d, thread %d", j, id);
+                            pre_buf_720[id][iter+CHUNCK_SIZE*i] = msg_ptr;
+                        }
+                        rd_one_frame.db_seq = NVME_RAW_720;
+                        rd_one_frame.start_fnum = j + CHUNK_SIZE*(i+1);
+                        rd_one_frame.total_fnum = CHUNK_SIZE;
+                        memcpy(rq_desc720.data(), &rd_one_frame, sizeof(request_desc));
+
                     }
-                    else {
-                        I("got 720p, deposit a frame");
-                        mg.DepositAFrame(desc720, msg_ptr);
-                    }
+                    status_720[id] = j;
+                    flag_720=false;
                 }
 
-                for(int i = rd_one_frame.start_fnum; i < rd_one_frame.start_fnum + rd_one_frame.total_fnum; i++) {
-                    mg.GetWatermarks(&wm_c, &wm_f);
+                /****If buffer size exceeds higher boundary set flag to false which means we can switch to next stage of video*/
+                /********** change == to >= **********/
+                if(j-status_720[id]<=CHUNK_SIZE)
+                    flag_720=false;                                   //terminate streaming
 
-                    I("watermarks:  chunk %u frame %u", wm_c, wm_f);
-                    rc = mg.RetrieveAFrame(&fp[id]);
+                /********** Requesting 720 New Frames if buffer size drops below lower boundary or buffer size is between lower and higher buffer when streaming**********/
+                if(j - status_720[id] >= 4*CHUNK_SIZE||flag_720==true) {
+                    flag_720=true;
+                    rd_one_frame.db_seq = NVME_RAW_720;
 
-                    if (rc == VS_ERR_EOF_CHUNKS) {
-                        break;
-                    }
-                    //xzl_bug_on(rc != 0);
+
+                    int N=chunk_num*CHUNK_SIZE-(j-status_720[id]);
+                    rd_one_frame.start_fnum=j+N;
+
+                    //rd_one_frame.start_fnum = j+CHUNK_SIZE;
+                    rd_one_frame.total_fnum = CHUNK_SIZE;
+                    memcpy(rq_desc720.data(), &rd_one_frame, sizeof(request_desc));
+                    worker_socket[id]->send(rq_desc720);
+                    I("------prefetch720p %d, thread %d------", j, id);
+                    I("Request sent, db: %d, frame: %d", rd_one_frame.db_seq, rd_one_frame.start_fnum);
+            }
+
+                msg_ptr = pre_buf_720[id][j%(chunk_num*CHUNK_SIZE)];                                     //fetch for computation
+
+#endif
+
+#if 0
+                if(j - status_720[id] <chunk_num*CHUNK_SIZE){
+                    msg_ptr = pre_buf_720[id][j%status_720[id]];
                 }
-*/
-                auto msg_ptr = recv_one_frame_720(*worker_socket[id]);
+                else {
+                    status_720[id] = j;
+                    worker_socket[id]->send(rq_desc720);
+                    I("Request sent, db: %d, frame: %d", rd_one_frame.db_seq, rd_one_frame.start_fnum);
+
+                    for (int iter = 0; iter < rd_one_frame.total_fnum; iter++) {
+                        msg_ptr = recv_one_chunk_720(*worker_socket[id]);
+                        //chunk = * (cv::Mat *)msg_ptr->data();
+                        I("prefetch here %d, thread %d", j, id);
+                        pre_buf_720[id][iter] = msg_ptr;
+                    }
+                    msg_ptr = pre_buf_720[id][j - status_720[id]];
+                }
+                //msg_ptr = recv_one_frame_720(*worker_socket[id]);
+#endif
                 char *imagedata_720 = NULL;
 
-                //imagedata_720 = (char *) malloc (sizeof(char) * framesize);
-                //imagedata_720 = static_cast<char *>(fp[id].msg_p->data()), fp[id].msg_p->size();
-                I("%lu", msg_ptr->size());
                 imagedata_720 = (char*)(msg_ptr->data()), msg_ptr->size();
 
                 frm_720.create(height_720, width_720, CV_8UC1);
+                //frm_720.create(height_ocr, width_ocr, CV_8UC1);
                 memcpy(frm_720.data, imagedata_720, framesize_720);
 
-                //omp_unset_lock(&writelock);
 
-                getTimeMonotonic(&startTime);
-                bool plate_found = recognizeplate(alpr[id], frm_720, "", outputJson, id, j, regionsOfInterest);
-                if (!plate_found && !outputJson) {
-                    std::cout << "No license plates found." << std::endl;
+                queue<PlateRegion> plateQueue = recognizeRegion(alpr[id], frm_720, "", outputJson, id, j, regionsOfInterest);
+
+                I("plateQueue size = %d", plateQueue.size());
+
+                /********** Prefetching one chunk of  720 New Frames after the computation **********/
+                /********** change == to >= **********/
+                if(j - status_720[id] >= 4*CHUNK_SIZE||flag_720==true) {
+                    for (int iter = 0; iter < rd_one_frame.total_fnum; iter++) {
+                        msg_ptr = recv_one_chunk_720(*worker_socket[id]);
+                        I("Initial prefetch %d, thread %d", j, id);
+                        pre_buf_720[id][(status_720[id]+iter) % (chunk_num*CHUNK_SIZE)]=msg_ptr;
+                        //pre_buf_720[id][(j - status_720[id] + iter) % (2*CHUNK_SIZE)] = msg_ptr;
+                    }
+                    /********** = TO += **********/
+                    status_720[id] +=CHUNK_SIZE;
                 }
-                getTimeMonotonic(&endTime);
-                std::cout << "Plate Recognition: " << diffclock(startTime, endTime) << "ms." << std::endl;
+
+
+                if(plateQueue.size() > 0) {
+                    //I("size = %d",plateQueue.size());
+#if 1
+                    /********** Initializing chunk_num*CHUNKS of New Frames (540p)  **********/
+
+                    if(j-status_540[id] > chunk_num*CHUNK_SIZE){
+                        for(int i=0;i<chunk_num;i++)
+                        {
+                            worker_socket[id]->send(rq_descocr);
+                            I("Initial request sent, db: %d, frame: %d", rd_one_frame_ocr.db_seq, rd_one_frame_ocr.start_fnum);
+                            for (int iter = 0; iter < rd_one_frame_ocr.total_fnum; iter++) {
+                                msg_ptr = recv_one_chunk_720(*worker_socket[id]);     /*****************//////////////////////////////////////**通用？
+                                I("Initial prefetch %d, thread %d", j, id);
+                                pre_buf_540[id][iter+CHUNCK_SIZE*i] = msg_ptr;
+                            }
+                            rd_one_frame_ocr.db_seq = NVME_RAW_540;
+                            rd_one_frame_ocr.start_fnum = j + CHUNK_SIZE*(i+1);
+                            rd_one_frame_ocr.total_fnum = CHUNK_SIZE;
+                            memcpy(rq_descocr.data(), &rd_one_frame_ocr, sizeof(request_desc));
+
+                        }
+                        status_540[id] = j;
+                        flag_540=false;
+                    }
+
+                    /****If buffer size exceeds higher boundary set flag to false which means we can switch to next stage of video*/
+                    /********** change == to >= **********/
+                    if(j-status_540[id]<=CHUNK_SIZE)
+                        flag_540=false;                                    // ///*premise one kind of request at a time?
+
+                    /********** Requesting 540 New Frames if buffer size drops below lower boundary or buffer size is between lower and higher buffer when streaming**********/
+                    //******************************跳帧*******************//
+                    if(j - status_540[id] >= 4*CHUNK_SIZE||flag_540==true) {      // ///*premise one kind of request at a time?**/////////////////////////////////????
+                        flag_540=true;
+                        rd_one_frame_ocr.db_seq = NVME_RAW_540;
+
+                        int N=chunk_num*CHUNK_SIZE-(j-status_540[id]);                         //buffer size-empty size(j-status_540[id])**********////////////////////////////////////????
+                        rd_one_frame_ocr.start_fnum = j+N;
+
+                        rd_one_frame_ocr.total_fnum = CHUNK_SIZE;
+                        memcpy(rq_descocr.data(), &rd_one_frame_ocr, sizeof(request_desc));
+                        worker_socket[id]->send(rq_descocr);
+                        I("------prefetch720p %d, thread %d------", j, id);
+                        I("Request sent, db: %d, frame: %d", rd_one_frame_ocr.db_seq, rd_one_frame_ocr.start_fnum);
+                    }
+
+                    msg_ptr = pre_buf_540[id][j%(chunk_num*CHUNK_SIZE)];                                     //fetch for computation
+
+
+#endif
+                    /********** Exactly the same retrieving process **********/
+
+                    memcpy(rq_descocr.data(), &rd_one_frame_ocr, sizeof(request_desc));
+
+                    //worker_socket[id]->send(rq_descocr);
+                    //I("Request sent, db: %d, frame: %d", rd_one_frame_ocr.db_seq, rd_one_frame_ocr.start_fnum);
+#if 0
+                    if(j - status_540[id] < CHUNK_SIZE){
+                        I("enter here status = %d", status_540[id]);
+                        msg_ptr = pre_buf_540[id][j-status_540[id]];
+                    }
+                    else {
+                        status_540[id] = j;
+                        worker_socket[id]->send(rq_descocr);
+                        I("Request sent, db: %d, frame: %d", rd_one_frame_ocr.db_seq, rd_one_frame_ocr.start_fnum);
+
+                        for (int iter = 0; iter < rd_one_frame_ocr.total_fnum; iter++) {
+                            msg_ptr = recv_one_chunk_720(*worker_socket[id]);
+                            //chunk = * (cv::Mat *)msg_ptr->data();
+                            I("prefetch here %d, thread %d", j, id);
+                            pre_buf_540[id][iter] = msg_ptr;
+                        }
+                        msg_ptr = pre_buf_540[id][j - status_540[id]];
+                    }
+                    //msg_ptr = recv_one_frame_720(*worker_socket[id]);
+#endif
+                    char *imagedata_ocr = NULL;
+
+                    //imagedata_ocr = static_cast<char *>(fp[id].msg_p->data()), fp[id].msg_p->size();
+                    imagedata_ocr = (char *) (msg_ptr->data()), msg_ptr->size();
+
+                    frm_ocr.create(height_ocr, width_ocr, CV_8UC1);
+                    //frm_ocr.create(height_720, width_720, CV_8UC1);
+                    memcpy(frm_ocr.data, imagedata_ocr, framesize_ocr);
+
+                    I("OCR frame height: %d, width: %d", frm_ocr.rows, frm_ocr.cols);
+
+                    getTimeMonotonic(&startTime);
+                    //bool plate_found = recognizeplate(alpr[id], frm_720, "", outputJson, id, j, regionsOfInterest);
+                    //bool plate_found = recognizeplate(alpr[id], frm_720, frm_ocr, "", outputJson, id, j, regionsOfInterest);
+                    //plate_found = recognizeplate(alpr[id], frm_ocr, frm_720, "", outputJson, id, j, regionsOfInterest);
+
+                    cv::Mat frm_ocr_gray = frm_ocr;
+                    if (frm_ocr.channels() > 2) {
+                        cvtColor(frm_ocr, frm_ocr_gray, CV_BGR2GRAY);
+                    }
+                    //I("OCR frame height: %d, width: %d", frm_ocr_gray.rows, frm_ocr_gray.cols);
+
+                    bool plate_found = recognizePlate(alpr[id], frm_ocr, frm_ocr_gray, "", outputJson, id, j, plateQueue);
+
+                    if (!plate_found && !outputJson) {
+                        std::cout << "No license plates found." << std::endl;
+                    }
+                    getTimeMonotonic(&endTime);
+                    std::cout << "Plate Recognition: " << diffclock(startTime, endTime) << "ms." << std::endl;
+#if 1
+                    /********** Prefetching one chunk of  720 New Frames after the computation **********/
+                    /********** change == to >= **********/
+                    if(j - status_540[id] >= 4*CHUNK_SIZE||flag_540==true) {
+
+                        for (int iter = 0; iter < rd_one_frame_ocr.total_fnum; iter++) {
+                            msg_ptr = recv_one_chunk_720(*worker_socket[id]);
+                            I("Initial prefetch %d, thread %d", j, id);
+                            pre_buf_540[id][(status_540[id]+iter) % (chunk_num*CHUNK_SIZE)]=msg_ptr;
+                        }
+                        /********** = TO += **********/
+                        status_540[id] +=CHUNK_SIZE;
+                    }
+
+#endif
+                }
 
             }
-            //omp_unset_lock(&writelock);
         }
-        //omp_destroy_lock(&writelock);
         k2_measure("alpr ends");
         k2_measure_flush();
         cout << "count = " << mycount << endl;
